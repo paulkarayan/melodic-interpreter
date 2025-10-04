@@ -125,6 +125,52 @@ MELODIC_DESCRIPTIONS = {
 }
 
 
+def _diff_abc_bars(original_abc: str, modified_abc: str, expected_changes: int) -> List[dict]:
+    """
+    Diff two ABC strings and return list of changed bars
+
+    Returns:
+        List of dicts with keys: bar_number, original, modified
+    """
+    try:
+        # Extract just the music (skip headers)
+        def get_music_lines(abc_text):
+            lines = abc_text.strip().split('\n')
+            music_start = 0
+            for i, line in enumerate(lines):
+                if line.startswith('K:'):
+                    music_start = i + 1
+                    break
+            return '\n'.join(lines[music_start:])
+
+        original_music = get_music_lines(original_abc)
+        modified_music = get_music_lines(modified_abc)
+
+        # Split into bars (simple split on |)
+        original_bars = [b.strip() for b in original_music.split('|') if b.strip()]
+        modified_bars = [b.strip() for b in modified_music.split('|') if b.strip()]
+
+        changed = []
+        for i, (orig, mod) in enumerate(zip(original_bars, modified_bars)):
+            # Normalize for comparison (remove extra spaces, etc)
+            orig_norm = ' '.join(orig.split())
+            mod_norm = ' '.join(mod.split())
+
+            if orig_norm != mod_norm:
+                changed.append({
+                    'bar_number': i + 1,
+                    'original': orig,
+                    'modified': mod
+                })
+
+        # Return up to expected_changes bars
+        return changed[:expected_changes] if expected_changes else changed
+
+    except Exception as e:
+        print(f"[DIFF ERROR] {e}")
+        return []
+
+
 def apply_melodic_multiple(
     abc: str,
     variation_type: str,
@@ -203,9 +249,10 @@ Return ONLY the modified ABC notation with the same headers (X:, T:, M:, L:, R:,
 
         print(f"[MELODIC LLM] Successfully generated variation")
 
-        # For now, return empty changed_bars since LLM returns full ABC
-        # In future, we could diff original vs modified to identify changes
-        return (modified_abc, description, [])
+        # Diff original vs modified to find changed bars
+        changed_bars = _diff_abc_bars(abc, modified_abc, num_spots)
+
+        return (modified_abc, description, changed_bars)
 
     except Exception as e:
         print(f"[MELODIC LLM ERROR] {e}")

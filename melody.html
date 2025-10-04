@@ -19,13 +19,15 @@
             <div class="input-group">
                 <label for="abc-input">ABC Notation:</label>
                 <textarea id="abc-input" placeholder="Paste ABC notation here...">X:1
-T:The Kesh Jig
+T:Sliabh Russell
+R:jig
 M:6/8
 L:1/8
-R:jig
-K:G
-|:G2G GBd|ege dBG|G2G GBd|ege dBA:|
-|:Bdd gfg|ege dBA|Bdd gfg|age dBA:|</textarea>
+K:Ador
+|:eAA Bcd|eaf ged|edB cBA|BAG ABd|
+eAA Bcd|eaf ged|edB cBA|1 BAG A3:|2 BAG ABd||
+|:eaa efg|agf gfd|eaa efg|afd e3|
+eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
             </div>
 
             <div class="input-group">
@@ -82,14 +84,16 @@ K:G
             <div class="section">
                 <h2>Original</h2>
                 <div id="original-notation" class="notation"></div>
-                <button class="play-button" onclick="playOriginal()">▶ Play Original</button>
+                <div style="margin-top: 10px;">
+                    <button class="play-button" onclick="playOriginal()">▶ Play Original</button>
+                    <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                </div>
             </div>
 
             <div id="variation-output" class="section variation">
                 <h2>Melodic Variation</h2>
                 <div id="variation-desc" class="description"></div>
-                <div id="variation-notation" class="notation"></div>
-                <button class="play-button" onclick="playMelodic()">▶ Play Variation</button>
+                <div id="variations-container"></div>
             </div>
         </div>
 
@@ -135,6 +139,12 @@ K:G
             document.getElementById('output-section').style.display = 'none';
             document.getElementById('lucky-output').style.display = 'none';
 
+            // Show spinner
+            document.getElementById('variation-desc').textContent = '⏳ Generating variation...';
+            document.getElementById('variation-output').style.display = 'block';
+            document.getElementById('output-section').style.display = 'block';
+            document.getElementById('variations-container').innerHTML = '';
+
             try {
                 const data = await generateMelodicVariation(abc, melodicType, lick);
 
@@ -148,30 +158,60 @@ K:G
 
                 console.log('[MELODY] Stored ABCs:', Object.keys(variationAbcs));
 
-                // Render
+                // Render original
                 renderAbc('original-notation', data.original);
 
-                // For melodic variations, show only changed bars if available
+                // Extract headers from original
+                const lines = data.original.split('\n');
+                const headerEnd = lines.findIndex(l => l.startsWith('K:'));
+                const headers = lines.slice(0, headerEnd + 1).join('\n');
+
+                // Display variation description
+                document.getElementById('variation-desc').textContent = data.melodic_desc;
+
+                // Render each changed bar as a separate snippet
                 if (data.melodic_changed_bars && data.melodic_changed_bars.length > 0) {
-                    console.log('[MELODY] Rendering changed bars only');
+                    console.log('[MELODY] Rendering changed bars as separate snippets');
 
-                    // Extract headers from original
-                    const lines = data.original.split('\n');
-                    const headerEnd = lines.findIndex(l => l.startsWith('K:'));
-                    const headers = lines.slice(0, headerEnd + 1).join('\n');
+                    let html = '';
+                    data.melodic_changed_bars.forEach((bar, i) => {
+                        // Store ABC for this snippet
+                        const snippetABC = headers + '\n|' + bar.modified + '|';
+                        variationAbcs[`snippet-${i}`] = snippetABC;
 
-                    // Build ABC with only changed bars
-                    let changedBarsABC = headers + '\n';
-                    data.melodic_changed_bars.forEach(bar => {
-                        changedBarsABC += '|' + bar.modified + '|';
+                        html += `
+                            <div class="section variation" style="margin-top: 20px;">
+                                <h4>Variation ${i + 1}</h4>
+                                <p class="description">Bar ${bar.bar_number}: ${bar.original} → ${bar.modified}</p>
+                                <div id="snippet-${i}" class="notation"></div>
+                                <div style="margin-top: 10px;">
+                                    <button class="play-button" onclick="playSnippet(${i})">▶ Play</button>
+                                    <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                                </div>
+                            </div>
+                        `;
                     });
 
-                    renderAbc('variation-notation', changedBarsABC);
+                    document.getElementById('variations-container').innerHTML = html;
+
+                    // Render all snippets
+                    data.melodic_changed_bars.forEach((bar, i) => {
+                        const snippetABC = headers + '\n|' + bar.modified + '|';
+                        renderAbc(`snippet-${i}`, snippetABC);
+                    });
                 } else {
-                    renderAbc('variation-notation', data.melodic);
+                    // Fallback: render full variation
+                    variationAbcs['full-variation'] = data.melodic;
+                    document.getElementById('variations-container').innerHTML = `
+                        <div id="full-variation" class="notation"></div>
+                        <div style="margin-top: 10px;">
+                            <button class="play-button" onclick="playFullVariation()">▶ Play</button>
+                            <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                        </div>
+                    `;
+                    renderAbc('full-variation', data.melodic);
                 }
 
-                document.getElementById('variation-desc').textContent = data.melodic_desc;
                 document.getElementById('variation-output').style.display = 'block';
                 document.getElementById('output-section').style.display = 'block';
 
@@ -231,7 +271,10 @@ K:G
                             <h3>Variation ${i + 1}</h3>
                             <p class="description">${v.description}</p>
                             <div id="lucky-${i}" class="notation"></div>
-                            <button class="play-button" onclick="playLucky(${i})">▶ Play</button>
+                            <div style="margin-top: 10px;">
+                                <button class="play-button" onclick="playLucky(${i})">▶ Play</button>
+                                <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                            </div>
                         </div>
                     `;
                 });
@@ -266,9 +309,14 @@ K:G
             playVariation('original', variationAbcs, tempo);
         };
 
-        window.playMelodic = function() {
+        window.playSnippet = function(index) {
             const tempo = parseInt(document.getElementById('tempo-value').value);
-            playVariation('melodic', variationAbcs, tempo);
+            playVariation(`snippet-${index}`, variationAbcs, tempo);
+        };
+
+        window.playFullVariation = function() {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation('full-variation', variationAbcs, tempo);
         };
 
         window.playLucky = function(index) {

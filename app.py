@@ -8,10 +8,17 @@ from pydantic import BaseModel
 from typing import Optional, List
 import random
 import os
+from dotenv import load_dotenv
 
-from core import harmony, melodic, session_scraper
+# Load environment variables from .env file
+load_dotenv()
+
+from core import harmony, melodic, session_scraper, melodic_transformations
 
 app = FastAPI(title="Irish Tune Variation Generator")
+
+# Mount static files
+app.mount("/shared", StaticFiles(directory="shared"), name="shared")
 
 # Check for Anthropic API key
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -44,8 +51,38 @@ class SessionRequest(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    """Serve the main HTML page"""
-    return FileResponse('variations_enhanced.html')
+    """Serve the main landing page"""
+    return FileResponse('index.html')
+
+@app.get("/index.html", response_class=HTMLResponse)
+async def index_html():
+    """Serve the main landing page"""
+    return FileResponse('index.html')
+
+@app.get("/melody.html", response_class=HTMLResponse)
+async def melody():
+    """Serve melodic variations page"""
+    return FileResponse('melody.html')
+
+@app.get("/harmony.html", response_class=HTMLResponse)
+async def harmony():
+    """Serve harmony page"""
+    return FileResponse('harmony.html')
+
+@app.get("/session.html", response_class=HTMLResponse)
+async def session():
+    """Serve session analysis page"""
+    return FileResponse('session.html')
+
+@app.get("/llm.html", response_class=HTMLResponse)
+async def llm():
+    """Serve LLM transformations page"""
+    return FileResponse('llm.html')
+
+@app.get("/melody-prompt.html", response_class=HTMLResponse)
+async def melody_prompt():
+    """Serve AI melodic transformations page"""
+    return FileResponse('melody-prompt.html')
 
 
 @app.post("/generate")
@@ -313,6 +350,244 @@ Important: Return ONLY valid ABC notation, nothing else. Keep the same headers (
         return {
             'error': str(e),
             'message': 'Failed to generate style transformations'
+        }
+
+
+class MelodyTransformRequest(BaseModel):
+    abc: str
+    transformation: str
+
+
+class MelodyTransformLuckyRequest(BaseModel):
+    abc: str
+
+
+class SessionVariationAnalysisRequest(BaseModel):
+    url: str
+
+
+@app.post("/transform-melody")
+async def transform_melody(req: MelodyTransformRequest):
+    """Transform melody using AI with specific transformation technique"""
+
+    if not ANTHROPIC_AVAILABLE:
+        return {
+            'error': 'Anthropic API not available',
+            'message': 'Set ANTHROPIC_API_KEY environment variable and install anthropic package'
+        }
+
+    if req.transformation not in melodic_transformations.TRANSFORMATIONS:
+        return {
+            'error': 'Invalid transformation',
+            'message': f'Transformation "{req.transformation}" not found'
+        }
+
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+        prompt = f"""Given this ABC notation for an Irish tune:
+
+{req.abc}
+
+{melodic_transformations.TRANSFORMATIONS[req.transformation]}
+
+Important: Return ONLY valid ABC notation, nothing else. Keep the same headers (X:, T:, M:, L:, R:, K:) and only modify the musical content."""
+
+        message = client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=2000,
+            messages=[{
+                "role": "user",
+                "content": prompt
+            }]
+        )
+
+        transformed_abc = message.content[0].text.strip()
+
+        # Clean up any markdown code blocks if present
+        if transformed_abc.startswith('```'):
+            lines = transformed_abc.split('\n')
+            transformed_abc = '\n'.join(lines[1:-1]) if len(lines) > 2 else transformed_abc
+
+        # Extract description from the prompt (first line)
+        description = melodic_transformations.TRANSFORMATIONS[req.transformation].split('\n')[1].replace('Transform this ABC notation by ', '').replace(':', '')
+
+        return {
+            'original': req.abc,
+            'transformed_abc': transformed_abc,
+            'transformation': req.transformation,
+            'description': description
+        }
+
+    except Exception as e:
+        return {
+            'error': str(e),
+            'message': 'Failed to generate melody transformation'
+        }
+
+
+@app.post("/transform-melody-lucky")
+async def transform_melody_lucky(req: MelodyTransformLuckyRequest):
+    """Generate 5 random melody transformations"""
+
+    if not ANTHROPIC_AVAILABLE:
+        return {
+            'error': 'Anthropic API not available',
+            'message': 'Set ANTHROPIC_API_KEY environment variable and install anthropic package'
+        }
+
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+        # Get 5 random transformations
+        selected = melodic_transformations.get_random_transformations(5)
+        transformations = []
+
+        for transformation_name in selected:
+            prompt = f"""Given this ABC notation for an Irish tune:
+
+{req.abc}
+
+{melodic_transformations.TRANSFORMATIONS[transformation_name]}
+
+Important: Return ONLY valid ABC notation, nothing else. Keep the same headers (X:, T:, M:, L:, R:, K:) and only modify the musical content."""
+
+            message = client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=2000,
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+
+            transformed_abc = message.content[0].text.strip()
+
+            # Clean up any markdown code blocks if present
+            if transformed_abc.startswith('```'):
+                lines = transformed_abc.split('\n')
+                transformed_abc = '\n'.join(lines[1:-1]) if len(lines) > 2 else transformed_abc
+
+            # Extract description from the prompt
+            description = melodic_transformations.TRANSFORMATIONS[transformation_name].split('\n')[1].replace('Transform this ABC notation by ', '').replace(':', '')
+
+            transformations.append({
+                'name': transformation_name,
+                'abc': transformed_abc,
+                'description': description
+            })
+
+        return {
+            'original': req.abc,
+            'transformations': transformations
+        }
+
+    except Exception as e:
+        return {
+            'error': str(e),
+            'message': 'Failed to generate melody transformations'
+        }
+
+
+@app.post("/analyze-session-variations")
+async def analyze_session_variations(req: SessionVariationAnalysisRequest):
+    """Analyze variations from The Session and create narrative analysis"""
+
+    if not ANTHROPIC_AVAILABLE:
+        return {
+            'error': 'Anthropic API not available',
+            'message': 'Set ANTHROPIC_API_KEY environment variable and install anthropic package'
+        }
+
+    try:
+        # Fetch tune data from The Session
+        tune_data = session_scraper.fetch_tune_from_session(req.url)
+
+        if not tune_data['settings'] or len(tune_data['settings']) < 2:
+            return {
+                'error': 'Not enough variations',
+                'message': 'This tune needs at least 2 settings for analysis'
+            }
+
+        # Get all ABC settings
+        settings = tune_data['settings']
+
+        # Build prompt for AI analysis
+        prompt = f"""You are analyzing variations of the Irish tune "{tune_data['title']}" ({tune_data['type']} in {tune_data['key']}).
+
+Here are {len(settings)} different settings/versions of this tune from The Session:
+
+"""
+
+        for i, setting in enumerate(settings, 1):
+            prompt += f"\n--- Setting {i} ---\n{setting}\n"
+
+        prompt += """
+Analyze these variations and write a narrative analysis (3-4 paragraphs) describing:
+
+1. What variation techniques are being used across these settings (e.g., neighbor tones, phrase ending changes, rhythmic variations, octave displacement, intervallic changes, etc.)
+
+2. Specific examples of how musicians vary this tune - point to specific bars or phrases and describe the differences
+
+3. Common patterns - which parts of the tune stay consistent vs. which parts show more variation
+
+4. The overall character and style of variation for this tune
+
+Write in an engaging, educational tone suitable for musicians learning about variation techniques. Be specific and reference actual musical content from the settings.
+
+After your narrative analysis, provide 3-5 musical examples in this exact JSON format:
+
+{
+  "narrative": "your narrative text here",
+  "examples": [
+    {
+      "title": "Example 1: Phrase Ending Variation",
+      "description": "Brief description of what this example demonstrates",
+      "abc": "valid ABC notation showing just the relevant bars"
+    }
+  ]
+}
+
+IMPORTANT: Return ONLY valid JSON, nothing else."""
+
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+        message = client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=3000,
+            messages=[{
+                "role": "user",
+                "content": prompt
+            }]
+        )
+
+        response_text = message.content[0].text.strip()
+
+        # Clean up markdown if present
+        if response_text.startswith('```json'):
+            response_text = response_text.replace('```json', '').replace('```', '').strip()
+        elif response_text.startswith('```'):
+            response_text = response_text.replace('```', '').strip()
+
+        # Parse JSON response
+        import json
+        analysis = json.loads(response_text)
+
+        return {
+            'title': tune_data['title'],
+            'type': tune_data['type'],
+            'key': tune_data['key'],
+            'num_settings': len(settings),
+            'narrative': analysis.get('narrative', ''),
+            'examples': analysis.get('examples', [])
+        }
+
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] {traceback.format_exc()}")
+        return {
+            'error': str(e),
+            'message': 'Failed to analyze session variations'
         }
 
 

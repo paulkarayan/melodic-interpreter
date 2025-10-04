@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Harmony Generator - Irish Tune Generator</title>
+    <link rel="stylesheet" href="shared/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/abcjs@6.4.3/dist/abcjs-basic-min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="section">
+            <h1>🎹 Harmony Generator</h1>
+            <p>Add harmonic accompaniment with drones, thirds, fifths, and quartal voicings</p>
+            <button class="back-button" onclick="window.location.href='index.html'">← Back to Index</button>
+        </div>
+
+        <div class="section warning">
+            <strong>⚠️ Warning:</strong> This section is experimental and untested. Use at your own risk.
+        </div>
+
+        <div class="section">
+            <div class="input-group">
+                <label for="abc-input">ABC Notation:</label>
+                <textarea id="abc-input" placeholder="Paste ABC notation here...">X:1
+T:Sliabh Russell
+R:jig
+M:6/8
+L:1/8
+K:Ador
+|:eAA Bcd|eaf ged|edB cBA|BAG ABd|
+eAA Bcd|eaf ged|edB cBA|1 BAG A3:|2 BAG ABd||
+|:eaa efg|agf gfd|eaa efg|afd e3|
+eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
+            </div>
+
+            <div class="input-group">
+                <label for="harmony-select">Harmony Type:</label>
+                <select id="harmony-select">
+                    <optgroup label="Traditional">
+                        <option value="drone_pedal">Drone Pedal (sustained root)</option>
+                        <option value="parallel_thirds">Parallel Thirds</option>
+                        <option value="parallel_sixths">Parallel Sixths</option>
+                        <option value="diatonic_thirds">Diatonic Thirds</option>
+                        <option value="open_fifths">Open Fifths</option>
+                        <option value="chord_changes">Chord Changes (harmonic movement)</option>
+                    </optgroup>
+                    <optgroup label="Extended Traditional">
+                        <option value="double_stops">Double Stops (fiddle-style)</option>
+                        <option value="bass_line">Walking Bass Line</option>
+                        <option value="modal_drone">Modal Drone (A-D pedal)</option>
+                        <option value="beat_emphasis">Beat Emphasis (strong beats only)</option>
+                        <option value="jig_rhythm">Jig Rhythm (beats 1, 3+4, 5+1)</option>
+                    </optgroup>
+                    <optgroup label="Contemporary">
+                        <option value="quartal_sparse">Quartal - Sparse (beats 1 & 5)</option>
+                        <option value="quartal_two">Quartal - Two-note fourths</option>
+                        <option value="quartal_moving">Quartal - Moving (parallel fourths)</option>
+                        <option value="suspended_chords">Suspended Chords (no 3rds)</option>
+                        <option value="modal_mixture">Modal Mixture (borrow from parallel modes)</option>
+                        <option value="countermelody">Countermelody (independent line)</option>
+                    </optgroup>
+                </select>
+            </div>
+
+            <button onclick="generateHarmony()">Generate Harmony</button>
+            <button onclick="feelingLucky()" style="background-color: #ff9800;">🍀 Feeling Lucky (5 Random)</button>
+        </div>
+
+        <div class="playback-controls">
+            <div class="tempo-control">
+                <label for="tempo-slider">Tempo (BPM):</label>
+                <input type="range" id="tempo-slider" min="60" max="240" value="120" step="5">
+                <input type="number" id="tempo-value" min="60" max="240" value="120" step="5">
+            </div>
+            <button class="stop-button" onclick="stopPlayback()">⏹ Stop All</button>
+        </div>
+
+        <div id="error-output" class="section error" style="display:none;">
+            <strong>Error:</strong> <span id="error-message"></span>
+        </div>
+
+        <div id="output-section" style="display:none;">
+            <div class="section">
+                <h2>Original</h2>
+                <div id="original-notation" class="notation"></div>
+                <button class="play-button" onclick="playOriginal()">▶ Play Original</button>
+            </div>
+
+            <div id="harmony-output" class="section variation">
+                <h2>Harmony Variation</h2>
+                <div id="harmony-desc" class="description"></div>
+                <div id="harmony-notation" class="notation"></div>
+                <button class="play-button" onclick="playHarmony()">▶ Play Harmony</button>
+            </div>
+        </div>
+
+        <div id="lucky-output" style="display:none;">
+            <h2>🍀 Feeling Lucky - 5 Random Harmony Variations</h2>
+            <div id="lucky-variations"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { playVariation, stopAllPlayback, renderAbc } from './shared/playback.js';
+
+        // State
+        let variationAbcs = {};
+
+        // Sync tempo controls
+        const tempoSlider = document.getElementById('tempo-slider');
+        const tempoValue = document.getElementById('tempo-value');
+
+        tempoSlider.addEventListener('input', () => {
+            tempoValue.value = tempoSlider.value;
+        });
+
+        tempoValue.addEventListener('input', () => {
+            tempoSlider.value = tempoValue.value;
+        });
+
+        // Show warning on load
+        window.addEventListener('DOMContentLoaded', () => {
+            const hasSeenWarning = sessionStorage.getItem('harmony-warning-seen');
+            if (!hasSeenWarning) {
+                alert('⚠️ WARNING: This section is experimental and untested.\n\nUse at your own risk. Features may be incomplete or contain bugs.');
+                sessionStorage.setItem('harmony-warning-seen', 'true');
+            }
+        });
+
+        // Generate harmony
+        window.generateHarmony = async function() {
+            console.log('[HARMONY] Generating variation...');
+
+            const abc = document.getElementById('abc-input').value;
+            const harmonyType = document.getElementById('harmony-select').value;
+
+            if (!abc) {
+                showError('Please provide ABC notation');
+                return;
+            }
+
+            hideError();
+            document.getElementById('output-section').style.display = 'none';
+            document.getElementById('lucky-output').style.display = 'none';
+
+            // Show spinner
+            document.getElementById('harmony-desc').textContent = '⏳ Generating harmony...';
+            document.getElementById('harmony-output').style.display = 'block';
+            document.getElementById('output-section').style.display = 'block';
+
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        abc: abc,
+                        harmony_type: harmonyType,
+                        melodic_type: 'none',
+                        lick: null,
+                        validate_anglo: false
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('[HARMONY] Response:', data);
+
+                // Store ABCs
+                variationAbcs = {
+                    original: data.original,
+                    harmony: data.harmony
+                };
+
+                console.log('[HARMONY] Stored ABCs:', Object.keys(variationAbcs));
+
+                // Render
+                renderAbc('original-notation', data.original);
+                renderAbc('harmony-notation', data.harmony);
+
+                document.getElementById('harmony-desc').textContent = data.harmony_desc;
+                document.getElementById('harmony-output').style.display = 'block';
+                document.getElementById('output-section').style.display = 'block';
+
+            } catch (error) {
+                console.error('[HARMONY ERROR]', error);
+                showError(error.message);
+            }
+        };
+
+        // Feeling Lucky
+        window.feelingLucky = async function() {
+            console.log('[HARMONY] Feeling lucky...');
+
+            const abc = document.getElementById('abc-input').value;
+
+            if (!abc) {
+                showError('Please provide ABC notation');
+                return;
+            }
+
+            hideError();
+            document.getElementById('output-section').style.display = 'none';
+            document.getElementById('lucky-output').style.display = 'block';
+            document.getElementById('lucky-variations').innerHTML = '<p>Generating 5 random variations...</p>';
+
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        abc: abc,
+                        harmony_type: 'feeling_lucky',
+                        melodic_type: 'none',
+                        lick: null,
+                        validate_anglo: false
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('[HARMONY LUCKY] Response:', data);
+
+                // Store original
+                variationAbcs.original = data.original;
+
+                // Render variations
+                let html = '';
+                data.harmony_lucky.forEach((v, i) => {
+                    variationAbcs[`harmony-lucky-${i}`] = v.abc;
+
+                    html += `
+                        <div class="section variation">
+                            <h3>Variation ${i + 1}</h3>
+                            <p class="description">${v.description}</p>
+                            <div id="lucky-${i}" class="notation"></div>
+                            <button class="play-button" onclick="playLucky(${i})">▶ Play</button>
+                        </div>
+                    `;
+                });
+
+                document.getElementById('lucky-variations').innerHTML = html;
+
+                // Render all
+                data.harmony_lucky.forEach((v, i) => {
+                    renderAbc(`lucky-${i}`, v.abc);
+                });
+
+            } catch (error) {
+                console.error('[HARMONY LUCKY ERROR]', error);
+                showError(error.message);
+            }
+        };
+
+        // Playback functions
+        window.playOriginal = function() {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation('original', variationAbcs, tempo);
+        };
+
+        window.playHarmony = function() {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation('harmony', variationAbcs, tempo);
+        };
+
+        window.playLucky = function(index) {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation(`harmony-lucky-${index}`, variationAbcs, tempo);
+        };
+
+        window.stopPlayback = function() {
+            stopAllPlayback();
+        };
+
+        // Error handling
+        function showError(message) {
+            document.getElementById('error-message').textContent = message;
+            document.getElementById('error-output').style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error-output').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
