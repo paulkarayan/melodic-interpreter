@@ -13,7 +13,8 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-from core import harmony, melodic, session_scraper, melodic_transformations
+from core import harmony, melodic, session_scraper, melodic_transformations, harmony_transformations, ornamentation_transformations
+from core.melodic import _diff_abc_bars
 
 app = FastAPI(title="Irish Tune Variation Generator")
 
@@ -83,6 +84,17 @@ async def llm():
 async def melody_prompt():
     """Serve AI melodic transformations page"""
     return FileResponse('melody-prompt.html')
+
+@app.get("/ornamentation.html", response_class=HTMLResponse)
+async def ornamentation_page():
+    """Serve ornamentation page"""
+    return FileResponse('ornamentation.html')
+
+@app.get("/ornamentation-prompt.html", response_class=HTMLResponse)
+async def ornamentation_prompt():
+    """Serve AI ornamentation transformations page"""
+    return FileResponse('ornamentation-prompt.html')
+
 
 
 @app.post("/generate")
@@ -366,6 +378,11 @@ class SessionVariationAnalysisRequest(BaseModel):
     url: str
 
 
+class OrnamentationRequest(BaseModel):
+    abc: str
+    ornamentation_type: str
+
+
 @app.post("/transform-melody")
 async def transform_melody(req: MelodyTransformRequest):
     """Transform melody using AI with specific transformation technique"""
@@ -391,7 +408,13 @@ async def transform_melody(req: MelodyTransformRequest):
 
 {melodic_transformations.TRANSFORMATIONS[req.transformation]}
 
-Important: Return ONLY valid ABC notation, nothing else. Keep the same headers (X:, T:, M:, L:, R:, K:) and only modify the musical content."""
+Return your response in this exact JSON format:
+{{
+  "abc": "the transformed ABC notation here",
+  "explanation": "2-3 sentence explanation of what specific musical changes you made (e.g., which notes were altered, which intervals changed, what rhythmic modifications occurred, etc.)"
+}}
+
+IMPORTANT: Return ONLY valid JSON, nothing else."""
 
         message = client.messages.create(
             model="claude-3-5-sonnet-20241022",
@@ -402,21 +425,34 @@ Important: Return ONLY valid ABC notation, nothing else. Keep the same headers (
             }]
         )
 
-        transformed_abc = message.content[0].text.strip()
+        response_text = message.content[0].text.strip()
 
-        # Clean up any markdown code blocks if present
-        if transformed_abc.startswith('```'):
-            lines = transformed_abc.split('\n')
-            transformed_abc = '\n'.join(lines[1:-1]) if len(lines) > 2 else transformed_abc
+        # Clean up markdown if present
+        if response_text.startswith('```json'):
+            response_text = response_text.replace('```json', '').replace('```', '').strip()
+        elif response_text.startswith('```'):
+            response_text = response_text.replace('```', '').strip()
+
+        # Parse JSON response
+        import json
+        result = json.loads(response_text)
+
+        transformed_abc = result.get('abc', '')
+        explanation = result.get('explanation', '')
 
         # Extract description from the prompt (first line)
         description = melodic_transformations.TRANSFORMATIONS[req.transformation].split('\n')[1].replace('Transform this ABC notation by ', '').replace(':', '')
+
+        # Diff to find changed bars
+        changed_bars = _diff_abc_bars(req.abc, transformed_abc, 5)
 
         return {
             'original': req.abc,
             'transformed_abc': transformed_abc,
             'transformation': req.transformation,
-            'description': description
+            'description': description,
+            'explanation': explanation,
+            'changed_bars': changed_bars
         }
 
     except Exception as e:
@@ -450,7 +486,13 @@ async def transform_melody_lucky(req: MelodyTransformLuckyRequest):
 
 {melodic_transformations.TRANSFORMATIONS[transformation_name]}
 
-Important: Return ONLY valid ABC notation, nothing else. Keep the same headers (X:, T:, M:, L:, R:, K:) and only modify the musical content."""
+Return your response in this exact JSON format:
+{{
+  "abc": "the transformed ABC notation here",
+  "explanation": "2-3 sentence explanation of what specific musical changes you made"
+}}
+
+IMPORTANT: Return ONLY valid JSON, nothing else."""
 
             message = client.messages.create(
                 model="claude-3-5-sonnet-20241022",
@@ -461,20 +503,31 @@ Important: Return ONLY valid ABC notation, nothing else. Keep the same headers (
                 }]
             )
 
-            transformed_abc = message.content[0].text.strip()
+            response_text = message.content[0].text.strip()
 
-            # Clean up any markdown code blocks if present
-            if transformed_abc.startswith('```'):
-                lines = transformed_abc.split('\n')
-                transformed_abc = '\n'.join(lines[1:-1]) if len(lines) > 2 else transformed_abc
+            # Clean up markdown if present
+            if response_text.startswith('```json'):
+                response_text = response_text.replace('```json', '').replace('```', '').strip()
+            elif response_text.startswith('```'):
+                response_text = response_text.replace('```', '').strip()
+
+            # Parse JSON response
+            result = json.loads(response_text)
+            transformed_abc = result.get('abc', '')
+            explanation = result.get('explanation', '')
 
             # Extract description from the prompt
             description = melodic_transformations.TRANSFORMATIONS[transformation_name].split('\n')[1].replace('Transform this ABC notation by ', '').replace(':', '')
 
+            # Diff to find changed bars
+            changed_bars = _diff_abc_bars(req.abc, transformed_abc, 5)
+
             transformations.append({
                 'name': transformation_name,
                 'abc': transformed_abc,
-                'description': description
+                'description': description,
+                'explanation': explanation,
+                'changed_bars': changed_bars
             })
 
         return {
@@ -589,6 +642,340 @@ IMPORTANT: Return ONLY valid JSON, nothing else."""
             'error': str(e),
             'message': 'Failed to analyze session variations'
         }
+
+
+@app.post("/transform-harmony")
+async def transform_harmony(req: MelodyTransformRequest):
+    """Transform harmony using AI with specific harmony technique"""
+
+    if not ANTHROPIC_AVAILABLE:
+        return {
+            'error': 'Anthropic API not available. Set ANTHROPIC_API_KEY environment variable.'
+        }
+
+    if req.transformation not in harmony_transformations.HARMONY_TRANSFORMATIONS:
+        return {
+            'error': f'Transformation "{req.transformation}" not found'
+        }
+
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+        prompt = f"""Given this ABC notation for an Irish tune:
+
+{req.abc}
+
+{harmony_transformations.HARMONY_TRANSFORMATIONS[req.transformation]}
+
+Return your response in this exact JSON format:
+{{
+  "abc": "the transformed ABC notation with harmonic accompaniment here",
+  "explanation": "2-3 sentence explanation of what specific harmonic changes you made (e.g., which harmony notes were added, what voicings used, what rhythmic placement, etc.)"
+}}
+
+IMPORTANT: Return ONLY valid JSON, nothing else."""
+
+        message = client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=2000,
+            messages=[{
+                "role": "user",
+                "content": prompt
+            }]
+        )
+
+        response_text = message.content[0].text.strip()
+
+        # Clean up markdown if present
+        if response_text.startswith('```json'):
+            response_text = response_text.replace('```json', '').replace('```', '').strip()
+        elif response_text.startswith('```'):
+            response_text = response_text.replace('```', '').strip()
+
+        # Parse JSON response
+        import json
+        result = json.loads(response_text)
+
+        transformed_abc = result.get('abc', '')
+        explanation = result.get('explanation', '')
+
+        # Extract description from the prompt (first line)
+        prompt_lines = harmony_transformations.HARMONY_TRANSFORMATIONS[req.transformation].split('\n')
+        description = prompt_lines[1] if len(prompt_lines) > 1 else req.transformation.replace('_', ' ').title()
+        description = description.replace('Transform this ABC notation by ', '').replace(':', '')
+
+        # Diff to find changed bars
+        changed_bars = _diff_abc_bars(req.abc, transformed_abc, 5)
+
+        return {
+            'original': req.abc,
+            'transformed_abc': transformed_abc,
+            'transformation': req.transformation,
+            'description': description,
+            'explanation': explanation,
+            'changed_bars': changed_bars
+        }
+
+    except Exception as e:
+        return {
+            'error': str(e)
+        }
+
+
+@app.post("/transform-harmony-lucky")
+async def transform_harmony_lucky(req: MelodyTransformLuckyRequest):
+    """Generate 5 random harmony transformations"""
+
+    if not ANTHROPIC_AVAILABLE:
+        return {
+            'error': 'Anthropic API not available. Set ANTHROPIC_API_KEY environment variable.'
+        }
+
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+        # Get 5 random harmony transformations
+        transformation_names = harmony_transformations.get_all_harmony_transformation_names()
+        selected = random.sample(transformation_names, min(5, len(transformation_names)))
+        transformations = []
+
+        for transformation_name in selected:
+            prompt = f"""Given this ABC notation for an Irish tune:
+
+{req.abc}
+
+{harmony_transformations.HARMONY_TRANSFORMATIONS[transformation_name]}
+
+Return your response in this exact JSON format:
+{{
+  "abc": "the transformed ABC notation with harmonic accompaniment here",
+  "explanation": "2-3 sentence explanation of what specific harmonic changes you made"
+}}
+
+IMPORTANT: Return ONLY valid JSON, nothing else."""
+
+            message = client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=2000,
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+
+            response_text = message.content[0].text.strip()
+
+            # Clean up markdown if present
+            if response_text.startswith('```json'):
+                response_text = response_text.replace('```json', '').replace('```', '').strip()
+            elif response_text.startswith('```'):
+                response_text = response_text.replace('```', '').strip()
+
+            # Parse JSON response
+            import json
+            result = json.loads(response_text)
+            transformed_abc = result.get('abc', '')
+            explanation = result.get('explanation', '')
+
+            # Extract description from the prompt
+            prompt_lines = harmony_transformations.HARMONY_TRANSFORMATIONS[transformation_name].split('\n')
+            description = prompt_lines[1] if len(prompt_lines) > 1 else transformation_name.replace('_', ' ').title()
+            description = description.replace('Transform this ABC notation by ', '').replace(':', '')
+
+            # Diff to find changed bars
+            changed_bars = _diff_abc_bars(req.abc, transformed_abc, 5)
+
+            transformations.append({
+                'name': transformation_name,
+                'abc': transformed_abc,
+                'description': description,
+                'explanation': explanation,
+                'changed_bars': changed_bars
+            })
+
+        return {
+            'original': req.abc,
+            'transformations': transformations
+        }
+
+    except Exception as e:
+        return {
+            'error': str(e)
+        }
+
+
+@app.post("/transform-ornamentation")
+async def transform_ornamentation(req: MelodyTransformRequest):
+    """Transform by adding ornamentation using AI with specific technique"""
+
+    if not ANTHROPIC_AVAILABLE:
+        return {
+            'error': 'Anthropic API not available. Set ANTHROPIC_API_KEY environment variable.'
+        }
+
+    if req.transformation not in ornamentation_transformations.ORNAMENTATION_TRANSFORMATIONS:
+        return {
+            'error': f'Transformation "{req.transformation}" not found'
+        }
+
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+        prompt = f"""Given this ABC notation for an Irish tune:
+
+{req.abc}
+
+{ornamentation_transformations.ORNAMENTATION_TRANSFORMATIONS[req.transformation]}
+
+Return your response in this exact JSON format:
+{{
+  "abc": "the transformed ABC notation with ornamentation added here",
+  "explanation": "2-3 sentence explanation of what specific ornamentation you added (e.g., which ornament types, where placed, what musical effect created, etc.)"
+}}
+
+IMPORTANT: Return ONLY valid JSON, nothing else."""
+
+        message = client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=2000,
+            messages=[{
+                "role": "user",
+                "content": prompt
+            }]
+        )
+
+        response_text = message.content[0].text.strip()
+
+        # Clean up markdown if present
+        if response_text.startswith('```json'):
+            response_text = response_text.replace('```json', '').replace('```', '').strip()
+        elif response_text.startswith('```'):
+            response_text = response_text.replace('```', '').strip()
+
+        # Parse JSON response
+        import json
+        result = json.loads(response_text)
+
+        transformed_abc = result.get('abc', '')
+        explanation = result.get('explanation', '')
+
+        # Extract description from the prompt (first line)
+        prompt_lines = ornamentation_transformations.ORNAMENTATION_TRANSFORMATIONS[req.transformation].split('\n')
+        description = prompt_lines[1] if len(prompt_lines) > 1 else req.transformation.replace('_', ' ').title()
+        description = description.replace('Transform this ABC notation by ', '').replace(':', '')
+
+        # Diff to find changed bars
+        changed_bars = _diff_abc_bars(req.abc, transformed_abc, 5)
+
+        return {
+            'original': req.abc,
+            'transformed_abc': transformed_abc,
+            'transformation': req.transformation,
+            'description': description,
+            'explanation': explanation,
+            'changed_bars': changed_bars
+        }
+
+    except Exception as e:
+        return {
+            'error': str(e)
+        }
+
+
+@app.post("/transform-ornamentation-lucky")
+async def transform_ornamentation_lucky(req: MelodyTransformLuckyRequest):
+    """Generate 5 random ornamentation transformations"""
+
+    if not ANTHROPIC_AVAILABLE:
+        return {
+            'error': 'Anthropic API not available. Set ANTHROPIC_API_KEY environment variable.'
+        }
+
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+        # Get 5 random ornamentation transformations
+        transformation_names = ornamentation_transformations.get_all_ornamentation_transformation_names()
+        selected = random.sample(transformation_names, min(5, len(transformation_names)))
+        transformations = []
+
+        for transformation_name in selected:
+            prompt = f"""Given this ABC notation for an Irish tune:
+
+{req.abc}
+
+{ornamentation_transformations.ORNAMENTATION_TRANSFORMATIONS[transformation_name]}
+
+Return your response in this exact JSON format:
+{{
+  "abc": "the transformed ABC notation with ornamentation added here",
+  "explanation": "2-3 sentence explanation of what specific ornamentation you added"
+}}
+
+IMPORTANT: Return ONLY valid JSON, nothing else."""
+
+            message = client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=2000,
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+
+            response_text = message.content[0].text.strip()
+
+            # Clean up markdown if present
+            if response_text.startswith('```json'):
+                response_text = response_text.replace('```json', '').replace('```', '').strip()
+            elif response_text.startswith('```'):
+                response_text = response_text.replace('```', '').strip()
+
+            # Parse JSON response
+            import json
+            result = json.loads(response_text)
+            transformed_abc = result.get('abc', '')
+            explanation = result.get('explanation', '')
+
+            # Extract description from the prompt
+            prompt_lines = ornamentation_transformations.ORNAMENTATION_TRANSFORMATIONS[transformation_name].split('\n')
+            description = prompt_lines[1] if len(prompt_lines) > 1 else transformation_name.replace('_', ' ').title()
+            description = description.replace('Transform this ABC notation by ', '').replace(':', '')
+
+            # Diff to find changed bars
+            changed_bars = _diff_abc_bars(req.abc, transformed_abc, 5)
+
+            transformations.append({
+                'name': transformation_name,
+                'abc': transformed_abc,
+                'description': description,
+                'explanation': explanation,
+                'changed_bars': changed_bars
+            })
+
+        return {
+            'original': req.abc,
+            'transformations': transformations
+        }
+
+    except Exception as e:
+        return {
+            'error': str(e)
+        }
+
+
+@app.post("/add-ornamentation")
+async def add_ornamentation(req: OrnamentationRequest):
+    """Add ornamentation to ABC notation (placeholder for future implementation)"""
+
+    # TODO: Implement ornamentation logic
+    # For now, return the original ABC unchanged
+    return {
+        'original': req.abc,
+        'ornamented': req.abc,
+        'description': f'{req.ornamentation_type}: Ornamentation will be added here',
+        'changed_bars': []
+    }
 
 
 @app.get("/health")

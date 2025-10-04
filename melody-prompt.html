@@ -40,10 +40,6 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                         <option value="scale_degree_substitution">Scale Degree Substitution</option>
                         <option value="arpeggio_scalar_swap">Arpeggio/Scalar Swap</option>
                     </optgroup>
-                    <optgroup label="Octave & Register">
-                        <option value="octave_displacement">Octave Displacement</option>
-                        <option value="registral_redistribution">Registral Redistribution</option>
-                    </optgroup>
                     <optgroup label="Note Density">
                         <option value="note_addition_scalar">Note Addition (Scalar)</option>
                         <option value="note_subtraction">Note Subtraction</option>
@@ -94,10 +90,6 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                         <option value="minimal_variation">Minimal Variation</option>
                         <option value="establishing_variation">Establishing Variation</option>
                     </optgroup>
-                    <optgroup label="Progressive (B Section)">
-                        <option value="moderate_variation">Moderate Variation</option>
-                        <option value="creative_variation">Creative Variation</option>
-                    </optgroup>
                     <optgroup label="Regional Styles">
                         <option value="clare_style">Clare Style</option>
                         <option value="donegal_style">Donegal Style</option>
@@ -127,14 +119,17 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
             <div class="section">
                 <h2>Original</h2>
                 <div id="original-notation" class="notation"></div>
-                <button class="play-button" onclick="playOriginal()">▶ Play Original</button>
+                <div style="margin-top: 10px;">
+                    <button class="play-button" onclick="playOriginal()">▶ Play Original</button>
+                    <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                </div>
             </div>
 
             <div id="transformation-output" class="section variation">
                 <h2>Transformed Melody</h2>
                 <div id="transformation-desc" class="description"></div>
-                <div id="transformation-notation" class="notation"></div>
-                <button class="play-button" onclick="playTransformation()">▶ Play Transformation</button>
+                <div id="transformation-explanation" class="description" style="margin-top: 10px; font-style: italic;"></div>
+                <div id="transformations-container"></div>
             </div>
         </div>
 
@@ -207,18 +202,88 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                     return;
                 }
 
-                // Store ABCs
+                // Store original ABC
                 variationAbcs = {
-                    original: data.original,
-                    transformation: data.transformed_abc
+                    original: data.original
                 };
 
-                // Render
+                // Render original
                 renderAbc('original-notation', data.original);
-                renderAbc('transformation-notation', data.transformed_abc);
 
+                // Extract headers from original
+                const lines = data.original.split('\n');
+                const headerEnd = lines.findIndex(l => l.startsWith('K:'));
+                const headers = lines.slice(0, headerEnd + 1).join('\n');
+
+                // Display transformation description and explanation
                 document.getElementById('transformation-desc').textContent =
                     `${transformationType.replace(/_/g, ' ')}: ${data.description}`;
+                document.getElementById('transformation-explanation').textContent =
+                    data.explanation || '';
+
+                // Render changed bars as separate snippets (like melody.html)
+                if (data.changed_bars && data.changed_bars.length > 0) {
+                    // Group bars by their modified content
+                    const groupedBars = {};
+                    data.changed_bars.forEach(bar => {
+                        const key = bar.modified;
+                        if (!groupedBars[key]) {
+                            groupedBars[key] = {
+                                modified: bar.modified,
+                                original: bar.original,
+                                bars: []
+                            };
+                        }
+                        groupedBars[key].bars.push(bar.bar_number);
+                    });
+
+                    let html = '';
+                    let variationIndex = 0;
+
+                    Object.values(groupedBars).forEach(group => {
+                        const snippetABC = headers + '\n|' + group.modified + '|';
+                        variationAbcs[`snippet-${variationIndex}`] = snippetABC;
+
+                        const barList = group.bars.length === 1
+                            ? `Bar ${group.bars[0]}`
+                            : `Bars ${group.bars.join(', ')}`;
+
+                        html += `
+                            <div class="section variation" style="margin-top: 20px;">
+                                <h4>Variation ${variationIndex + 1}</h4>
+                                <p class="description">${barList}: ${group.original} → ${group.modified}</p>
+                                <div id="snippet-${variationIndex}" class="notation"></div>
+                                <div style="margin-top: 10px;">
+                                    <button class="play-button" onclick="playSnippet(${variationIndex})">▶ Play</button>
+                                    <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                                </div>
+                            </div>
+                        `;
+                        variationIndex++;
+                    });
+
+                    document.getElementById('transformations-container').innerHTML = html;
+
+                    // Render all snippets
+                    variationIndex = 0;
+                    Object.values(groupedBars).forEach(group => {
+                        const snippetABC = headers + '\n|' + group.modified + '|';
+                        renderAbc(`snippet-${variationIndex}`, snippetABC);
+                        variationIndex++;
+                    });
+                } else {
+                    // Fallback: render full transformation
+                    variationAbcs['full-transformation'] = data.transformed_abc;
+                    document.getElementById('transformations-container').innerHTML = `
+                        <div id="full-transformation" class="notation"></div>
+                        <div style="margin-top: 10px;">
+                            <button class="play-button" onclick="playFullTransformation()">▶ Play</button>
+                            <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                        </div>
+                    `;
+                    renderAbc('full-transformation', data.transformed_abc);
+                }
+
                 document.getElementById('transformation-output').style.display = 'block';
                 document.getElementById('output-section').style.display = 'block';
 
@@ -280,8 +345,12 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                         <div class="section variation">
                             <h3>${trans.name.replace(/_/g, ' ')}</h3>
                             <p class="description">${trans.description}</p>
+                            ${trans.explanation ? `<p class="description" style="font-style: italic; margin-top: 10px;">${trans.explanation}</p>` : ''}
                             <div id="lucky-${i}" class="notation"></div>
-                            <button class="play-button" onclick="playLucky(${i})">▶ Play</button>
+                            <div style="margin-top: 10px;">
+                                <button class="play-button" onclick="playLucky(${i})">▶ Play</button>
+                                <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                            </div>
                         </div>
                     `;
                 });
@@ -306,9 +375,14 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
             playVariation('original', variationAbcs, tempo);
         };
 
-        window.playTransformation = function() {
+        window.playSnippet = function(index) {
             const tempo = parseInt(document.getElementById('tempo-value').value);
-            playVariation('transformation', variationAbcs, tempo);
+            playVariation(`snippet-${index}`, variationAbcs, tempo);
+        };
+
+        window.playFullTransformation = function() {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation('full-transformation', variationAbcs, tempo);
         };
 
         window.playLucky = function(index) {

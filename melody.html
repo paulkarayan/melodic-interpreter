@@ -173,31 +173,70 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                 if (data.melodic_changed_bars && data.melodic_changed_bars.length > 0) {
                     console.log('[MELODY] Rendering changed bars as separate snippets');
 
+                    // Group bars by their modified content (same modification = one variation)
+                    const groupedBars = {};
+                    data.melodic_changed_bars.forEach(bar => {
+                        const key = bar.modified;
+                        if (!groupedBars[key]) {
+                            groupedBars[key] = {
+                                modified: bar.modified,
+                                original: bar.original,
+                                bars: []
+                            };
+                        }
+                        groupedBars[key].bars.push(bar.bar_number);
+                    });
+
                     let html = '';
-                    data.melodic_changed_bars.forEach((bar, i) => {
+                    let variationIndex = 0;
+
+                    Object.values(groupedBars).forEach(group => {
                         // Store ABC for this snippet
-                        const snippetABC = headers + '\n|' + bar.modified + '|';
-                        variationAbcs[`snippet-${i}`] = snippetABC;
+                        const snippetABC = headers + '\n|' + group.modified + '|';
+                        variationAbcs[`snippet-${variationIndex}`] = snippetABC;
+
+                        // Build bar list description
+                        const barList = group.bars.length === 1
+                            ? `Bar ${group.bars[0]}`
+                            : `Bars ${group.bars.join(', ')}`;
 
                         html += `
                             <div class="section variation" style="margin-top: 20px;">
-                                <h4>Variation ${i + 1}</h4>
-                                <p class="description">Bar ${bar.bar_number}: ${bar.original} → ${bar.modified}</p>
-                                <div id="snippet-${i}" class="notation"></div>
+                                <h4>Variation ${variationIndex + 1}</h4>
+                                <p class="description">${barList}: ${group.original} → ${group.modified}</p>
+                                <div id="snippet-${variationIndex}" class="notation"></div>
+                                <div style="margin-top: 15px; padding: 10px; background-color: #fffef0; border-left: 4px solid #ffeb3b; border-radius: 4px;">
+                                    <p style="margin: 0 0 10px 0; font-size: 12px; color: #666;">
+                                        <strong>Full Tune with Variation</strong> (${barList} highlighted)
+                                    </p>
+                                    <div id="full-tune-${variationIndex}" class="notation"></div>
+                                </div>
                                 <div style="margin-top: 10px;">
-                                    <button class="play-button" onclick="playSnippet(${i})">▶ Play</button>
+                                    <button class="play-button" onclick="playSnippet(${variationIndex})">▶ Play Snippet</button>
                                     <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                                    <button class="play-button" onclick="playFullTune(${variationIndex})">▶ Play in Full Tune</button>
                                 </div>
                             </div>
                         `;
+                        variationIndex++;
                     });
 
                     document.getElementById('variations-container').innerHTML = html;
 
-                    // Render all snippets
-                    data.melodic_changed_bars.forEach((bar, i) => {
-                        const snippetABC = headers + '\n|' + bar.modified + '|';
-                        renderAbc(`snippet-${i}`, snippetABC);
+                    // Render all snippets and full tunes
+                    variationIndex = 0;
+                    Object.values(groupedBars).forEach(group => {
+                        const snippetABC = headers + '\n|' + group.modified + '|';
+                        renderAbc(`snippet-${variationIndex}`, snippetABC);
+
+                        // Create full tune with variation substituted and highlighted
+                        const fullTuneABC = createFullTuneWithVariation(data.original, data.melodic_changed_bars, group.bars);
+                        variationAbcs[`full-tune-${variationIndex}`] = fullTuneABC;
+
+                        // Render with yellow highlighting for varied bars
+                        renderAbcWithHighlight(`full-tune-${variationIndex}`, fullTuneABC, group.bars);
+
+                        variationIndex++;
                     });
                 } else {
                     // Fallback: render full variation
@@ -324,8 +363,143 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
             playVariation(`melodic-lucky-${index}`, variationAbcs, tempo);
         };
 
+        window.playFullTune = function(index) {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation(`full-tune-${index}`, variationAbcs, tempo);
+        };
+
         window.stopPlayback = function() {
             stopAllPlayback();
+        };
+
+        // Helper: Create full tune with variation substituted and annotation markers
+        function createFullTuneWithVariation(originalABC, changedBars, targetBarNumbers) {
+            // Get the melodic content (after headers)
+            const lines = originalABC.split('\n');
+            const headerEnd = lines.findIndex(l => l.startsWith('K:'));
+            const headers = lines.slice(0, headerEnd + 1).join('\n');
+            const bodyLines = lines.slice(headerEnd + 1);
+            const body = bodyLines.join('\n');
+
+            // Split into bars
+            const bars = body.split('|').filter(b => b.trim());
+
+            // Create a map of bar number to modified content
+            const modifications = {};
+            changedBars.forEach(cb => {
+                if (targetBarNumbers.includes(cb.bar_number)) {
+                    modifications[cb.bar_number] = cb.modified;
+                }
+            });
+
+            // Reconstruct with modifications and add color annotations for highlighted bars
+            const modifiedBars = bars.map((bar, idx) => {
+                const barNumber = idx + 1;
+                const barContent = modifications[barNumber] || bar;
+
+                // Add yellow background annotation for modified bars
+                if (modifications[barNumber]) {
+                    return `"_Varied"${barContent}`;
+                }
+                return barContent;
+            });
+
+            return headers + '\n|' + modifiedBars.join('|') + '|';
+        }
+
+        // Helper: Render ABC with highlighted bars
+        function renderAbcWithHighlight(elementId, abc, highlightedBarNumbers) {
+            const element = document.getElementById(elementId);
+            if (!element) {
+                console.error('[MELODY] Element not found:', elementId);
+                return;
+            }
+
+            console.log('[MELODY] Highlighting bars:', highlightedBarNumbers, 'in', elementId);
+
+            // Render the ABC
+            const visualObjs = ABCJS.renderAbc(elementId, abc, {
+                responsive: 'resize'
+            });
+
+            // Wait for render, then add yellow boxes behind specific bars
+            setTimeout(() => {
+                if (!visualObjs || visualObjs.length === 0) return;
+
+                const svg = element.querySelector('svg');
+                if (!svg) return;
+
+                const visualObj = visualObjs[0];
+                if (!visualObj.lines) return;
+
+                // Track bar numbers and collect bounding boxes
+                let currentBarNum = 1;
+                const barBoxes = new Map(); // Map of bar number to bounding box
+
+                visualObj.lines.forEach(line => {
+                    if (!line.staff || !line.staff[0] || !line.staff[0].voices) return;
+
+                    const voice = line.staff[0].voices[0];
+                    if (!voice) return;
+
+                    let barMinX = null, barMaxX = null, barMinY = null, barMaxY = null;
+
+                    voice.forEach((element, idx) => {
+                        // Accumulate bounds for current bar
+                        if (element.abselem && element.abselem.elemset) {
+                            element.abselem.elemset.forEach(domEl => {
+                                try {
+                                    const bbox = domEl.getBBox();
+                                    if (barMinX === null || bbox.x < barMinX) barMinX = bbox.x;
+                                    if (barMaxX === null || bbox.x + bbox.width > barMaxX) barMaxX = bbox.x + bbox.width;
+                                    if (barMinY === null || bbox.y < barMinY) barMinY = bbox.y;
+                                    if (barMaxY === null || bbox.y + bbox.height > barMaxY) barMaxY = bbox.y + bbox.height;
+                                } catch (e) {}
+                            });
+                        }
+
+                        // When we hit a bar line, save the current bar's bounds
+                        if (element.el_type === 'bar') {
+                            if (barMinX !== null && highlightedBarNumbers.includes(currentBarNum)) {
+                                barBoxes.set(currentBarNum, {
+                                    x: barMinX - 3,
+                                    y: barMinY - 3,
+                                    width: barMaxX - barMinX + 6,
+                                    height: barMaxY - barMinY + 6
+                                });
+                                console.log(`[MELODY] Bar ${currentBarNum} bounds:`, barBoxes.get(currentBarNum));
+                            }
+                            currentBarNum++;
+                            barMinX = barMaxX = barMinY = barMaxY = null;
+                        }
+                    });
+
+                    // Handle last bar in line
+                    if (barMinX !== null && highlightedBarNumbers.includes(currentBarNum)) {
+                        barBoxes.set(currentBarNum, {
+                            x: barMinX - 3,
+                            y: barMinY - 3,
+                            width: barMaxX - barMinX + 6,
+                            height: barMaxY - barMinY + 6
+                        });
+                        console.log(`[MELODY] Bar ${currentBarNum} bounds (final):`, barBoxes.get(currentBarNum));
+                    }
+                });
+
+                // Draw yellow rectangles for highlighted bars
+                console.log(`[MELODY] Drawing ${barBoxes.size} highlight rectangles`);
+                barBoxes.forEach((box, barNum) => {
+                    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    rect.setAttribute('x', box.x);
+                    rect.setAttribute('y', box.y);
+                    rect.setAttribute('width', box.width);
+                    rect.setAttribute('height', box.height);
+                    rect.setAttribute('fill', '#ffeb3b');
+                    rect.setAttribute('opacity', '0.5');
+                    rect.setAttribute('rx', '3');
+                    svg.insertBefore(rect, svg.firstChild);
+                });
+            }, 200);
         };
 
         // Error handling

@@ -61,7 +61,9 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        import { renderAbc } from './shared/playback.js';
+
         // Show warning on load
         window.addEventListener('DOMContentLoaded', () => {
             const hasSeenWarning = sessionStorage.getItem('session-warning-seen');
@@ -84,8 +86,9 @@
             hideError();
             document.getElementById('session-output').style.display = 'none';
 
-            // Show spinner
-            showError('⏳ Analyzing session...');
+            // Show loading message (not in error section)
+            document.getElementById('session-output').style.display = 'block';
+            document.getElementById('session-output').innerHTML = '<p>⏳ Analyzing session...</p>';
 
             try {
                 const response = await fetch('/analyze-session', {
@@ -131,16 +134,36 @@
                         // Show example changes if available
                         if (comp.example_changes && comp.example_changes.length > 0) {
                             let examplesHtml = '';
-                            comp.example_changes.forEach(ex => {
+                            comp.example_changes.forEach((ex, barIdx) => {
                                 examplesHtml += `<div style="margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-left: 3px solid #666;">`;
                                 examplesHtml += `<strong>Bar ${ex.bar_number}:</strong><br>`;
                                 ex.examples.forEach((bar, idx) => {
-                                    examplesHtml += `<code style="display: block; margin: 5px 0; padding: 5px; background: white;">Version ${idx + 1}: ${bar}</code>`;
+                                    // Create a unique ID for each notation rendering
+                                    const notationId = `notation-bar${barIdx}-version${idx}`;
+                                    examplesHtml += `<div style="margin: 10px 0;">`;
+                                    examplesHtml += `<strong style="font-size: 0.9em;">Version ${idx + 1}:</strong>`;
+                                    examplesHtml += `<div id="${notationId}" class="notation" style="background: ${idx === 0 ? 'white' : '#fffacd'}; padding: 5px;"></div>`;
+                                    examplesHtml += `</div>`;
                                 });
                                 examplesHtml += `</div>`;
                             });
                             document.getElementById('examples-content').innerHTML = examplesHtml;
                             document.getElementById('examples-section').style.display = 'block';
+
+                            // Render each notation snippet
+                            // Get headers from first setting
+                            const firstSetting = data.settings[0];
+                            const lines = firstSetting.split('\n');
+                            const headerEnd = lines.findIndex(l => l.startsWith('K:'));
+                            const headers = lines.slice(0, headerEnd + 1).join('\n');
+
+                            comp.example_changes.forEach((ex, barIdx) => {
+                                ex.examples.forEach((bar, idx) => {
+                                    const notationId = `notation-bar${barIdx}-version${idx}`;
+                                    const snippetABC = headers + '\n|' + bar + '|';
+                                    renderAbc(notationId, snippetABC);
+                                });
+                            });
                         }
 
                         // Show unique techniques

@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ornamentation - Irish Tune Generator</title>
+    <link rel="stylesheet" href="shared/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/abcjs@6.4.3/dist/abcjs-basic-min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="section">
+            <h1>🎶 Ornamentation</h1>
+            <p>Add traditional Irish ornamentation techniques to tunes</p>
+            <button class="back-button" onclick="window.location.href='index.html'">← Back to Index</button>
+        </div>
+
+        <div class="section">
+            <div class="input-group">
+                <label for="abc-input">ABC Notation:</label>
+                <textarea id="abc-input" placeholder="Paste ABC notation here...">X:1
+T:Sliabh Russell
+R:jig
+M:6/8
+L:1/8
+K:Ador
+|:eAA Bcd|eaf ged|edB cBA|BAG ABd|
+eAA Bcd|eaf ged|edB cBA|1 BAG A3:|2 BAG ABd||
+|:eaa efg|agf gfd|eaa efg|afd e3|
+eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
+            </div>
+
+            <div class="input-group">
+                <label for="ornamentation-select">Ornamentation Type:</label>
+                <select id="ornamentation-select">
+                    <optgroup label="Grace Notes">
+                        <option value="cuts">Cuts</option>
+                        <option value="rolls">Rolls</option>
+                        <option value="triplets">Triplets</option>
+                        <option value="cranns">Cranns</option>
+                    </optgroup>
+                    <optgroup label="Slides & Bends">
+                        <option value="slides">Slides</option>
+                        <option value="bends">Bends</option>
+                    </optgroup>
+                    <optgroup label="Combined">
+                        <option value="mixed">Mixed Ornamentation</option>
+                    </optgroup>
+                </select>
+            </div>
+
+            <button onclick="generateOrnamentation()">Add Ornamentation</button>
+        </div>
+
+        <div class="playback-controls">
+            <div class="tempo-control">
+                <label for="tempo-slider">Tempo (BPM):</label>
+                <input type="range" id="tempo-slider" min="60" max="240" value="120" step="5">
+                <input type="number" id="tempo-value" min="60" max="240" value="120" step="5">
+            </div>
+            <button class="stop-button" onclick="stopPlayback()">⏹ Stop All</button>
+        </div>
+
+        <div id="error-output" class="section error" style="display:none;">
+            <strong>Error:</strong> <span id="error-message"></span>
+        </div>
+
+        <div id="output-section" style="display:none;">
+            <div class="section">
+                <h2>Original</h2>
+                <div id="original-notation" class="notation"></div>
+                <div style="margin-top: 10px;">
+                    <button class="play-button" onclick="playOriginal()">▶ Play Original</button>
+                    <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                </div>
+            </div>
+
+            <div id="ornamentation-output" class="section variation">
+                <h2>Ornamented Melody</h2>
+                <div id="ornamentation-desc" class="description"></div>
+                <div id="ornamentation-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { playVariation, stopAllPlayback, renderAbc } from './shared/playback.js';
+
+        // State
+        let variationAbcs = {};
+
+        // Sync tempo controls
+        const tempoSlider = document.getElementById('tempo-slider');
+        const tempoValue = document.getElementById('tempo-value');
+
+        tempoSlider.addEventListener('input', () => {
+            tempoValue.value = tempoSlider.value;
+        });
+
+        tempoValue.addEventListener('input', () => {
+            tempoSlider.value = tempoValue.value;
+        });
+
+        // Generate ornamentation
+        window.generateOrnamentation = async function() {
+            console.log('[ORNAMENTATION] Generating ornamentation...');
+
+            const abc = document.getElementById('abc-input').value;
+            const ornamentationType = document.getElementById('ornamentation-select').value;
+
+            if (!abc) {
+                showError('Please provide ABC notation');
+                return;
+            }
+
+            hideError();
+            document.getElementById('output-section').style.display = 'none';
+
+            // Show spinner
+            document.getElementById('ornamentation-desc').textContent = '⏳ Adding ornamentation...';
+            document.getElementById('ornamentation-output').style.display = 'block';
+            document.getElementById('output-section').style.display = 'block';
+            document.getElementById('ornamentation-container').innerHTML = '';
+
+            try {
+                const response = await fetch('/add-ornamentation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        abc: abc,
+                        ornamentation_type: ornamentationType
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('[ORNAMENTATION] Response:', data);
+
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                // Store ABCs
+                variationAbcs = {
+                    original: data.original,
+                    ornamented: data.ornamented
+                };
+
+                console.log('[ORNAMENTATION] Stored ABCs:', Object.keys(variationAbcs));
+
+                // Render original
+                renderAbc('original-notation', data.original);
+
+                // Extract headers from original
+                const lines = data.original.split('\n');
+                const headerEnd = lines.findIndex(l => l.startsWith('K:'));
+                const headers = lines.slice(0, headerEnd + 1).join('\n');
+
+                // Display variation description
+                document.getElementById('ornamentation-desc').textContent = data.description;
+
+                // Render each changed bar as a separate snippet
+                if (data.changed_bars && data.changed_bars.length > 0) {
+                    console.log('[ORNAMENTATION] Rendering changed bars as separate snippets');
+
+                    // Group bars by their modified content (same modification = one variation)
+                    const groupedBars = {};
+                    data.changed_bars.forEach(bar => {
+                        const key = bar.modified;
+                        if (!groupedBars[key]) {
+                            groupedBars[key] = {
+                                modified: bar.modified,
+                                original: bar.original,
+                                bars: []
+                            };
+                        }
+                        groupedBars[key].bars.push(bar.bar_number);
+                    });
+
+                    let html = '';
+                    let variationIndex = 0;
+
+                    Object.values(groupedBars).forEach(group => {
+                        // Store ABC for this snippet
+                        const snippetABC = headers + '\n|' + group.modified + '|';
+                        variationAbcs[`snippet-${variationIndex}`] = snippetABC;
+
+                        // Build bar list description
+                        const barList = group.bars.length === 1
+                            ? `Bar ${group.bars[0]}`
+                            : `Bars ${group.bars.join(', ')}`;
+
+                        html += `
+                            <div class="section variation" style="margin-top: 20px;">
+                                <h4>Variation ${variationIndex + 1}</h4>
+                                <p class="description">${barList}: ${group.original} → ${group.modified}</p>
+                                <div id="snippet-${variationIndex}" class="notation"></div>
+                                <div id="full-tune-${variationIndex}" class="notation" style="margin-top: 15px;"></div>
+                                <div style="margin-top: 10px;">
+                                    <button class="play-button" onclick="playSnippet(${variationIndex})">▶ Play Snippet</button>
+                                    <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                                    <button class="play-button" onclick="playFullTune(${variationIndex})">▶ Play in Full Tune</button>
+                                </div>
+                            </div>
+                        `;
+                        variationIndex++;
+                    });
+
+                    document.getElementById('ornamentation-container').innerHTML = html;
+
+                    // Render all snippets and full tunes
+                    variationIndex = 0;
+                    Object.values(groupedBars).forEach(group => {
+                        const snippetABC = headers + '\n|' + group.modified + '|';
+                        renderAbc(`snippet-${variationIndex}`, snippetABC);
+
+                        // Create full tune with ornamentation substituted and highlighted
+                        const fullTuneABC = createFullTuneWithVariation(data.original, data.changed_bars, group.bars);
+                        variationAbcs[`full-tune-${variationIndex}`] = fullTuneABC;
+
+                        // Render with yellow highlighting for ornamented bars
+                        renderAbcWithHighlight(`full-tune-${variationIndex}`, fullTuneABC, group.bars);
+
+                        variationIndex++;
+                    });
+                } else {
+                    // Fallback: render full ornamented tune
+                    variationAbcs['full-ornamented'] = data.ornamented;
+                    document.getElementById('ornamentation-container').innerHTML = `
+                        <div id="full-ornamented" class="notation"></div>
+                        <div style="margin-top: 10px;">
+                            <button class="play-button" onclick="playFullOrnamented()">▶ Play</button>
+                            <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                        </div>
+                    `;
+                    renderAbc('full-ornamented', data.ornamented);
+                }
+
+                document.getElementById('ornamentation-output').style.display = 'block';
+                document.getElementById('output-section').style.display = 'block';
+
+            } catch (error) {
+                console.error('[ORNAMENTATION ERROR]', error);
+                showError(error.message);
+            }
+        };
+
+        // Playback functions
+        window.playOriginal = function() {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation('original', variationAbcs, tempo);
+        };
+
+        window.playSnippet = function(index) {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation(`snippet-${index}`, variationAbcs, tempo);
+        };
+
+        window.playFullOrnamented = function() {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation('full-ornamented', variationAbcs, tempo);
+        };
+
+        window.playFullTune = function(index) {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation(`full-tune-${index}`, variationAbcs, tempo);
+        };
+
+        window.stopPlayback = function() {
+            stopAllPlayback();
+        };
+
+        // Helper: Create full tune with variation substituted
+        function createFullTuneWithVariation(originalABC, changedBars, targetBarNumbers) {
+            // Get the melodic content (after headers)
+            const lines = originalABC.split('\n');
+            const headerEnd = lines.findIndex(l => l.startsWith('K:'));
+            const headers = lines.slice(0, headerEnd + 1).join('\n');
+            const bodyLines = lines.slice(headerEnd + 1);
+            const body = bodyLines.join('\n');
+
+            // Split into bars
+            const bars = body.split('|').filter(b => b.trim());
+
+            // Create a map of bar number to modified content
+            const modifications = {};
+            changedBars.forEach(cb => {
+                if (targetBarNumbers.includes(cb.bar_number)) {
+                    modifications[cb.bar_number] = cb.modified;
+                }
+            });
+
+            // Reconstruct with modifications
+            const modifiedBars = bars.map((bar, idx) => {
+                const barNumber = idx + 1;
+                return modifications[barNumber] || bar;
+            });
+
+            return headers + '\n|' + modifiedBars.join('|') + '|';
+        }
+
+        // Helper: Render ABC with highlighted bars
+        function renderAbcWithHighlight(elementId, abc, highlightedBarNumbers) {
+            // For now, use standard render - ABC.js highlighting is complex
+            // We'll add visual styling via CSS class
+            const element = document.getElementById(elementId);
+            if (!element) return;
+
+            renderAbc(elementId, abc);
+
+            // Add a visual indicator
+            element.style.backgroundColor = '#fffacd';
+            element.style.padding = '10px';
+            element.style.borderRadius = '5px';
+        };
+
+        // Error handling
+        function showError(message) {
+            document.getElementById('error-message').textContent = message;
+            document.getElementById('error-output').style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error-output').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
