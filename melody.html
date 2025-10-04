@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Melodic Variations - Irish Tune Generator</title>
+    <link rel="stylesheet" href="shared/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/abcjs@6.4.3/dist/abcjs-basic-min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="section">
+            <h1>🎼 Melodic Variations</h1>
+            <p>Apply melodic variations using traditional and contemporary techniques</p>
+            <button class="back-button" onclick="window.location.href='index.html'">← Back to Index</button>
+        </div>
+
+        <div class="section">
+            <div class="input-group">
+                <label for="abc-input">ABC Notation:</label>
+                <textarea id="abc-input" placeholder="Paste ABC notation here...">X:1
+T:The Kesh Jig
+M:6/8
+L:1/8
+R:jig
+K:G
+|:G2G GBd|ege dBG|G2G GBd|ege dBA:|
+|:Bdd gfg|ege dBA|Bdd gfg|age dBA:|</textarea>
+            </div>
+
+            <div class="input-group">
+                <label for="melodic-select">Melodic Variation Type:</label>
+                <select id="melodic-select">
+                    <optgroup label="Traditional">
+                        <option value="neighbor">Neighbor tone substitution</option>
+                        <option value="phrase_ending">Phrase ending variation</option>
+                        <option value="note_consolidation">Note consolidation (longer durations)</option>
+                    </optgroup>
+                    <optgroup label="Extended Traditional">
+                        <option value="arpeggiation">Arpeggiation (chord tones)</option>
+                        <option value="motivic_sequence">Motivic sequence (repeat at different pitch)</option>
+                        <option value="contour_simplification">Contour simplification (smooth zigzags)</option>
+                        <option value="octave_displacement">Octave displacement</option>
+                    </optgroup>
+                    <optgroup label="Contemporary">
+                        <option value="chromatic">Chromatic passing tones</option>
+                        <option value="intervallic_expansion">Intervallic expansion (widen intervals)</option>
+                        <option value="rhythmic_consolidation">Rhythmic consolidation (fewer, longer notes)</option>
+                        <option value="cross_rhythm">Cross-rhythm (3-against-2)</option>
+                    </optgroup>
+                    <optgroup label="Experimental">
+                        <option value="rhythmic_shift">Rhythmic displacement</option>
+                        <option value="simplification">Simplification (reduce to essentials)</option>
+                    </optgroup>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label for="lick-input">Target Specific Lick (optional):</label>
+                <input type="text" id="lick-input" placeholder="e.g., eAABcd (leave empty for 2-5 random locations)">
+                <small style="color: #666;">If specified, only this pattern will be varied. Otherwise, variations will be applied to 2-5 different spots automatically.</small>
+            </div>
+
+            <button onclick="generateVariation()">Generate Variation</button>
+            <button onclick="feelingLucky()" style="background-color: #ff9800;">🍀 Feeling Lucky (5 Random)</button>
+        </div>
+
+        <div class="playback-controls">
+            <div class="tempo-control">
+                <label for="tempo-slider">Tempo (BPM):</label>
+                <input type="range" id="tempo-slider" min="60" max="240" value="120" step="5">
+                <input type="number" id="tempo-value" min="60" max="240" value="120" step="5">
+            </div>
+            <button class="stop-button" onclick="stopPlayback()">⏹ Stop All</button>
+        </div>
+
+        <div id="error-output" class="section error" style="display:none;">
+            <strong>Error:</strong> <span id="error-message"></span>
+        </div>
+
+        <div id="output-section" style="display:none;">
+            <div class="section">
+                <h2>Original</h2>
+                <div id="original-notation" class="notation"></div>
+                <button class="play-button" onclick="playOriginal()">▶ Play Original</button>
+            </div>
+
+            <div id="variation-output" class="section variation">
+                <h2>Melodic Variation</h2>
+                <div id="variation-desc" class="description"></div>
+                <div id="variation-notation" class="notation"></div>
+                <button class="play-button" onclick="playMelodic()">▶ Play Variation</button>
+            </div>
+        </div>
+
+        <div id="lucky-output" style="display:none;">
+            <h2>🍀 Feeling Lucky - 5 Random Melodic Variations</h2>
+            <div id="lucky-variations"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { playVariation, stopAllPlayback, renderAbc } from './shared/playback.js';
+        import { generateMelodicVariation } from './shared/api.js';
+
+        // State
+        let variationAbcs = {};
+
+        // Sync tempo controls
+        const tempoSlider = document.getElementById('tempo-slider');
+        const tempoValue = document.getElementById('tempo-value');
+
+        tempoSlider.addEventListener('input', () => {
+            tempoValue.value = tempoSlider.value;
+        });
+
+        tempoValue.addEventListener('input', () => {
+            tempoSlider.value = tempoValue.value;
+        });
+
+        // Generate variation
+        window.generateVariation = async function() {
+            console.log('[MELODY] Generating variation...');
+
+            const abc = document.getElementById('abc-input').value;
+            const melodicType = document.getElementById('melodic-select').value;
+            const lick = document.getElementById('lick-input').value.trim() || null;
+
+            if (!abc) {
+                showError('Please provide ABC notation');
+                return;
+            }
+
+            hideError();
+            document.getElementById('output-section').style.display = 'none';
+            document.getElementById('lucky-output').style.display = 'none';
+
+            try {
+                const data = await generateMelodicVariation(abc, melodicType, lick);
+
+                console.log('[MELODY] Response:', data);
+
+                // Store ABCs
+                variationAbcs = {
+                    original: data.original,
+                    melodic: data.melodic
+                };
+
+                console.log('[MELODY] Stored ABCs:', Object.keys(variationAbcs));
+
+                // Render
+                renderAbc('original-notation', data.original);
+
+                // For melodic variations, show only changed bars if available
+                if (data.melodic_changed_bars && data.melodic_changed_bars.length > 0) {
+                    console.log('[MELODY] Rendering changed bars only');
+
+                    // Extract headers from original
+                    const lines = data.original.split('\n');
+                    const headerEnd = lines.findIndex(l => l.startsWith('K:'));
+                    const headers = lines.slice(0, headerEnd + 1).join('\n');
+
+                    // Build ABC with only changed bars
+                    let changedBarsABC = headers + '\n';
+                    data.melodic_changed_bars.forEach(bar => {
+                        changedBarsABC += '|' + bar.modified + '|';
+                    });
+
+                    renderAbc('variation-notation', changedBarsABC);
+                } else {
+                    renderAbc('variation-notation', data.melodic);
+                }
+
+                document.getElementById('variation-desc').textContent = data.melodic_desc;
+                document.getElementById('variation-output').style.display = 'block';
+                document.getElementById('output-section').style.display = 'block';
+
+            } catch (error) {
+                console.error('[MELODY ERROR]', error);
+                showError(error.message);
+            }
+        };
+
+        // Feeling Lucky
+        window.feelingLucky = async function() {
+            console.log('[MELODY] Feeling lucky...');
+
+            const abc = document.getElementById('abc-input').value;
+
+            if (!abc) {
+                showError('Please provide ABC notation');
+                return;
+            }
+
+            hideError();
+            document.getElementById('output-section').style.display = 'none';
+            document.getElementById('lucky-output').style.display = 'block';
+            document.getElementById('lucky-variations').innerHTML = '<p>Generating 5 random variations...</p>';
+
+            try {
+                // Generate melodic "feeling lucky" by calling /generate with feeling_lucky
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        abc: abc,
+                        harmony_type: 'none',
+                        melodic_type: 'feeling_lucky',
+                        lick: null,
+                        validate_anglo: false
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('[MELODY LUCKY] Response:', data);
+
+                // Store original
+                variationAbcs.original = data.original;
+
+                // Render variations
+                let html = '';
+                data.melodic_lucky.forEach((v, i) => {
+                    variationAbcs[`melodic-lucky-${i}`] = v.abc;
+
+                    html += `
+                        <div class="section variation">
+                            <h3>Variation ${i + 1}</h3>
+                            <p class="description">${v.description}</p>
+                            <div id="lucky-${i}" class="notation"></div>
+                            <button class="play-button" onclick="playLucky(${i})">▶ Play</button>
+                        </div>
+                    `;
+                });
+
+                document.getElementById('lucky-variations').innerHTML = html;
+
+                // Render all
+                data.melodic_lucky.forEach((v, i) => {
+                    if (v.changed_bars && v.changed_bars.length > 0) {
+                        const lines = data.original.split('\n');
+                        const headerEnd = lines.findIndex(l => l.startsWith('K:'));
+                        const headers = lines.slice(0, headerEnd + 1).join('\n');
+                        let changedBarsABC = headers + '\n';
+                        v.changed_bars.forEach(bar => {
+                            changedBarsABC += '|' + bar.modified + '|';
+                        });
+                        renderAbc(`lucky-${i}`, changedBarsABC);
+                    } else {
+                        renderAbc(`lucky-${i}`, v.abc);
+                    }
+                });
+
+            } catch (error) {
+                console.error('[MELODY LUCKY ERROR]', error);
+                showError(error.message);
+            }
+        };
+
+        // Playback functions
+        window.playOriginal = function() {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation('original', variationAbcs, tempo);
+        };
+
+        window.playMelodic = function() {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation('melodic', variationAbcs, tempo);
+        };
+
+        window.playLucky = function(index) {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation(`melodic-lucky-${index}`, variationAbcs, tempo);
+        };
+
+        window.stopPlayback = function() {
+            stopAllPlayback();
+        };
+
+        // Error handling
+        function showError(message) {
+            document.getElementById('error-message').textContent = message;
+            document.getElementById('error-output').style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error-output').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Irish Tune Variations - Enhanced</title>
+    <script src="https://cdn.jsdelivr.net/npm/abcjs@6.2.2/dist/abcjs-basic-min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/abcjs@6.2.2/abcjs-audio.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Georgia', serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f0;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #666;
+            padding-bottom: 10px;
+        }
+        .section {
+            background-color: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .input-group {
+            margin: 15px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        select, textarea, input[type="url"], input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        textarea {
+            min-height: 150px;
+        }
+        button {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px 10px 0;
+        }
+        button:hover {
+            background-color: #357abd;
+        }
+        button.lucky {
+            background-color: #52c41a;
+        }
+        button.lucky:hover {
+            background-color: #389e0d;
+        }
+        .variation {
+            background-color: #fafafa;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #4a90e2;
+        }
+        .notation {
+            margin: 15px 0;
+            background-color: white;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .description {
+            color: #666;
+            font-style: italic;
+            margin: 10px 0;
+        }
+        .harmony-variation {
+            border-left-color: #e94e77;
+        }
+        .melodic-variation {
+            border-left-color: #52c41a;
+        }
+        .session-variation {
+            border-left-color: #fa8c16;
+        }
+        .lucky-variation {
+            border-left-color: #722ed1;
+        }
+        #output {
+            display: none;
+        }
+        .error {
+            background-color: #fff2f0;
+            border: 1px solid #ffccc7;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            color: #cf1322;
+        }
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .tab-button {
+            background-color: #e8e8e8;
+            padding: 10px 20px;
+        }
+        .tab-button.active {
+            background-color: #4a90e2;
+        }
+        .lick-input {
+            background-color: #fffbe6;
+            border: 1px solid #ffe58f;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .playback-controls {
+            background-color: #f0f0f0;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .tempo-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .tempo-control input[type="range"] {
+            width: 150px;
+        }
+        .tempo-control input[type="number"] {
+            width: 60px;
+            padding: 5px;
+        }
+        .play-button {
+            background-color: #52c41a;
+            min-width: 80px;
+        }
+        .play-button:hover {
+            background-color: #389e0d;
+        }
+        .stop-button {
+            background-color: #f5222d;
+            min-width: 80px;
+        }
+        .stop-button:hover {
+            background-color: #cf1322;
+        }
+    </style>
+</head>
+<body>
+    <h1>Irish Tune Variation Generator</h1>
+
+    <div class="section">
+        <h2>Input</h2>
+
+        <div class="input-group">
+            <label for="abc-input">ABC Notation:</label>
+            <textarea id="abc-input">X: 1
+T: Sliabh Russell
+R: jig
+M: 6/8
+L: 1/8
+K: Ador
+|:eAA Bcd|eaf ged|edB cBA|BAG ABd|
+eAA Bcd|eaf ged|edB cBA|1 BAG A3:|2 BAG ABd||
+|:eaa efg|agf gfd|eaa efg|afd e3|
+eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
+        </div>
+
+        <div class="input-group">
+            <label for="session-url">The Session URL <span id="session-required" style="color: #cf1322; display: none;">(required for Session Variations)</span>:</label>
+            <input type="url" id="session-url" placeholder="https://thesession.org/tunes/1234">
+        </div>
+
+        <div class="tab-buttons">
+            <button class="tab-button active" onclick="showTab('harmony')">Harmony</button>
+            <button class="tab-button" onclick="showTab('melodic')">Melodic</button>
+            <button class="tab-button" onclick="showTab('session')">Session Variations</button>
+        </div>
+
+        <div id="harmony-tab" class="tab-content">
+            <div class="input-group">
+                <label for="harmony-select">Harmony Options:</label>
+                <select id="harmony-select">
+                    <option value="feeling_lucky">🎲 I'm Feeling Lucky (5 random harmony variations)</option>
+                    <optgroup label="Traditional">
+                        <option value="drone_pedal">Drone Pedal (sustained root)</option>
+                        <option value="parallel_thirds">Parallel Thirds</option>
+                        <option value="parallel_sixths">Parallel Sixths</option>
+                        <option value="diatonic_thirds">Diatonic Thirds</option>
+                        <option value="open_fifths">Open Fifths</option>
+                        <option value="chord_changes">Chord Changes (harmonic movement)</option>
+                    </optgroup>
+                    <optgroup label="Extended Traditional">
+                        <option value="double_stops">Double Stops (fiddle-style)</option>
+                        <option value="bass_line">Walking Bass Line</option>
+                        <option value="modal_drone">Modal Drone (A-D pedal)</option>
+                        <option value="beat_emphasis">Beat Emphasis (strong beats only)</option>
+                        <option value="jig_rhythm">Jig Rhythm (beats 1, 3+4, 5+1)</option>
+                    </optgroup>
+                    <optgroup label="Contemporary">
+                        <option value="quartal_sparse">Quartal - Sparse (beats 1 & 5)</option>
+                        <option value="quartal_two">Quartal - Two-note fourths</option>
+                        <option value="quartal_moving">Quartal - Moving (parallel fourths)</option>
+                        <option value="suspended_chords">Suspended Chords (no 3rds)</option>
+                        <option value="modal_mixture">Modal Mixture (borrow from parallel modes)</option>
+                        <option value="countermelody">Countermelody (independent line)</option>
+                    </optgroup>
+                </select>
+            </div>
+        </div>
+
+        <div id="melodic-tab" class="tab-content" style="display:none;">
+            <div class="input-group">
+                <label for="melodic-select">Melodic Variation:</label>
+                <select id="melodic-select">
+                    <option value="feeling_lucky">🎲 I'm Feeling Lucky (5 random melodic variations)</option>
+                    <optgroup label="Traditional">
+                        <option value="neighbor">Neighbor tone substitution</option>
+                        <option value="phrase_ending">Phrase ending variation</option>
+                        <option value="note_consolidation">Note consolidation (longer durations)</option>
+                    </optgroup>
+                    <optgroup label="Extended Traditional">
+                        <option value="arpeggiation">Arpeggiation (chord tones)</option>
+                        <option value="motivic_sequence">Motivic sequence (repeat at different pitch)</option>
+                        <option value="contour_simplification">Contour simplification (smooth zigzags)</option>
+                        <option value="octave_displacement">Octave displacement</option>
+                    </optgroup>
+                    <optgroup label="Contemporary">
+                        <option value="chromatic">Chromatic passing tones</option>
+                        <option value="intervallic_expansion">Intervallic expansion (widen intervals)</option>
+                        <option value="rhythmic_consolidation">Rhythmic consolidation (fewer, longer notes)</option>
+                        <option value="cross_rhythm">Cross-rhythm (3-against-2)</option>
+                    </optgroup>
+                    <optgroup label="Experimental">
+                        <option value="rhythmic_shift">Rhythmic displacement</option>
+                        <option value="simplification">Simplification (reduce to essentials)</option>
+                    </optgroup>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label for="lick-input">Target Specific Lick (optional - e.g., "eAABcd"):</label>
+                <input type="text" id="lick-input" class="lick-input" placeholder="Leave empty to apply to 2-5 places automatically">
+                <small style="color: #666;">If specified, only this pattern will be varied. Otherwise, 2-5 variations will be applied throughout.</small>
+            </div>
+        </div>
+
+        <div id="session-tab" class="tab-content" style="display:none;">
+            <div class="input-group">
+                <p>When you provide a Session URL, this will analyze existing variations and show:</p>
+                <ul>
+                    <li>Common melodic patterns across versions</li>
+                    <li>Unique variation approaches (different from standard patterns)</li>
+                    <li>Side-by-side comparison of variations</li>
+                    <li>Suggested variations based on Session patterns</li>
+                </ul>
+                <p><em>Note: Requires valid Session URL above</em></p>
+            </div>
+        </div>
+
+        <button onclick="generateVariations()">Generate Variations</button>
+
+        <div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #ddd;">
+            <h3 style="color: #666; margin-bottom: 10px;">Random Generation</h3>
+            <div class="button-group">
+                <button class="lucky" onclick="feelingLucky()">🍀 Feeling Lucky (5 Random Combinations)</button>
+                <button style="background-color: #722ed1;" onclick="transformationPrompts()">✨ Style Transformations (LLM-based)</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="output" class="section">
+        <h2>Generated Variations</h2>
+
+        <div class="playback-controls">
+            <div class="tempo-control">
+                <label for="tempo-slider">Tempo (BPM):</label>
+                <input type="range" id="tempo-slider" min="60" max="240" value="120" step="5">
+                <input type="number" id="tempo-value" min="60" max="240" value="120" step="5">
+            </div>
+            <button class="play-button" id="play-btn" onclick="playCurrentAbc()">▶ Play</button>
+            <button class="stop-button" id="stop-btn" onclick="stopPlayback()">⏹ Stop</button>
+        </div>
+
+        <h3>Original</h3>
+        <div id="original-notation" class="notation"></div>
+        <div id="original-audio"></div>
+
+        <div id="harmony-output">
+            <h3>Harmony Variation</h3>
+            <div class="variation harmony-variation">
+                <div class="description" id="harmony-desc"></div>
+                <div id="harmony-notation" class="notation"></div>
+                <div id="harmony-audio"></div>
+                <button class="play-button" onclick="playVariation('harmony')">▶ Play Harmony</button>
+            </div>
+        </div>
+
+        <div id="melodic-output">
+            <h3>Melodic Variation</h3>
+            <div class="variation melodic-variation">
+                <div class="description" id="melodic-desc"></div>
+                <div id="melodic-notation" class="notation"></div>
+                <div id="melodic-audio"></div>
+                <button class="play-button" onclick="playVariation('melodic')">▶ Play Melodic</button>
+            </div>
+        </div>
+
+        <div id="combined-output">
+            <h3>Variations</h3>
+            <div class="variation">
+                <div class="description" id="combined-desc"></div>
+                <div id="combined-notation" class="notation"></div>
+                <div id="combined-audio"></div>
+                <button class="play-button" onclick="playVariation('combined')">▶ Play</button>
+            </div>
+        </div>
+
+        <div id="session-output" style="display:none;">
+            <h3>Session Variations Analysis</h3>
+            <div class="variation session-variation">
+                <div id="session-content"></div>
+            </div>
+        </div>
+
+        <div id="lucky-output" style="display:none;">
+            <h3>🍀 Feeling Lucky - 5 Random Variations</h3>
+            <div id="lucky-variations"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'harmony';
+        let currentAbc = '';
+        let variationAbcs = {
+            original: '',
+            harmony: '',
+            melodic: '',
+            combined: ''
+        };
+        let synthControllers = {};
+
+        // Sync tempo slider and input
+        document.addEventListener('DOMContentLoaded', function() {
+            const slider = document.getElementById('tempo-slider');
+            const input = document.getElementById('tempo-value');
+
+            slider.addEventListener('input', function() {
+                input.value = this.value;
+            });
+
+            input.addEventListener('input', function() {
+                slider.value = this.value;
+            });
+        });
+
+        // Generic function to play any variation
+        function playVariation(variationType) {
+            console.log(`[PLAYBACK] Playing variation type: ${variationType}`);
+            console.log(`[PLAYBACK] Available variations:`, Object.keys(variationAbcs));
+
+            const abc = variationAbcs[variationType];
+            console.log(`[PLAYBACK] ABC for ${variationType}:`, abc ? abc.substring(0, 100) + '...' : 'NOT FOUND');
+
+            if (!abc) {
+                console.error(`[PLAYBACK ERROR] No ABC found for variation: ${variationType}`);
+                alert(`No ${variationType} variation loaded`);
+                return;
+            }
+
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            console.log(`[PLAYBACK] Tempo: ${tempo} BPM`);
+
+            // Stop all currently playing music
+            stopAllPlayback();
+
+            // Set tempo in ABC notation
+            let abcWithTempo = abc;
+            if (!abcWithTempo.includes('Q:')) {
+                abcWithTempo = abcWithTempo.replace(/K:([^\n]+)/, `K:$1\nQ:1/4=${tempo}`);
+            } else {
+                abcWithTempo = abcWithTempo.replace(/Q:[^\n]+/, `Q:1/4=${tempo}`);
+            }
+            console.log(`[PLAYBACK] ABC with tempo set:`, abcWithTempo.substring(0, 150) + '...');
+
+            // Create synth and play
+            if (ABCJS.synth.supportsAudio()) {
+                console.log(`[PLAYBACK] Audio supported, creating synth...`);
+
+                // Parse ABC for audio only (don't re-render visuals)
+                const visualObj = ABCJS.renderAbc('*', abcWithTempo, {
+                    visualTranspose: 0
+                })[0];
+                console.log(`[PLAYBACK] Visual object created:`, visualObj);
+
+                // Always create a NEW synth (can't reuse them)
+                const newSynth = new ABCJS.synth.CreateSynth();
+                synthControllers[variationType] = newSynth;
+                console.log(`[PLAYBACK] New synth created for ${variationType}`);
+
+                newSynth.init({
+                    visualObj: visualObj,
+                    options: {
+                        program: 73, // Flute sound
+                        qpm: tempo
+                    }
+                }).then(() => {
+                    console.log(`[PLAYBACK] Synth initialized, priming...`);
+                    return newSynth.prime();
+                }).then(() => {
+                    console.log(`[PLAYBACK] Synth primed, starting playback...`);
+                    newSynth.start();
+                    console.log(`[PLAYBACK] Playback started successfully`);
+                }).catch(error => {
+                    console.error('[PLAYBACK ERROR] Playback failed:', error);
+                    alert('Playback failed. Check console for details.');
+                });
+            } else {
+                console.error('[PLAYBACK ERROR] Audio not supported in browser');
+                alert('Audio not supported in this browser');
+            }
+        }
+
+        // Play the original tune (backward compatibility)
+        function playCurrentAbc() {
+            playVariation('original');
+        }
+
+        function stopAllPlayback() {
+            Object.values(synthControllers).forEach(synth => {
+                if (synth && synth.stop) {
+                    synth.stop();
+                }
+            });
+        }
+
+        function stopPlayback() {
+            stopAllPlayback();
+        }
+
+        // Play lucky variations
+        function playLuckyVariation(type, index) {
+            const variationKey = `${type}-lucky-${index}`;
+            const abc = variationAbcs[variationKey];
+            if (!abc) {
+                alert(`Lucky variation ${index + 1} not loaded`);
+                return;
+            }
+
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+
+            // Stop all currently playing music
+            stopAllPlayback();
+
+            // Set tempo in ABC notation
+            let abcWithTempo = abc;
+            if (!abcWithTempo.includes('Q:')) {
+                abcWithTempo = abcWithTempo.replace(/K:([^\n]+)/, `K:$1\nQ:1/4=${tempo}`);
+            } else {
+                abcWithTempo = abcWithTempo.replace(/Q:[^\n]+/, `Q:1/4=${tempo}`);
+            }
+
+            // Create synth and play
+            if (ABCJS.synth.supportsAudio()) {
+                // Parse ABC for audio only (don't re-render visuals)
+                const visualObj = ABCJS.renderAbc('*', abcWithTempo, {
+                    visualTranspose: 0
+                })[0];
+
+                // Always create a NEW synth (can't reuse them)
+                const newSynth = new ABCJS.synth.CreateSynth();
+                synthControllers[variationKey] = newSynth;
+
+                newSynth.init({
+                    visualObj: visualObj,
+                    options: {
+                        program: 73, // Flute sound
+                        qpm: tempo
+                    }
+                }).then(() => {
+                    return newSynth.prime();
+                }).then(() => {
+                    newSynth.start();
+                }).catch(error => {
+                    console.error('Playback error:', error);
+                    alert('Playback failed. Check console for details.');
+                });
+            } else {
+                alert('Audio not supported in this browser');
+            }
+        }
+
+        function showTab(tab) {
+            currentTab = tab;
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+
+            // Show selected
+            document.getElementById(tab + '-tab').style.display = 'block';
+            event.target.classList.add('active');
+
+            // Show/hide session URL requirement
+            if (tab === 'session') {
+                document.getElementById('session-required').style.display = 'inline';
+            } else {
+                document.getElementById('session-required').style.display = 'none';
+            }
+        }
+
+
+        // Parse ABC to get components
+        function parseABC(abc) {
+            const lines = abc.split('\n');
+            const headerEnd = lines.findIndex(l => l.startsWith('K:'));
+            const headers = lines.slice(0, headerEnd + 1);
+            const body = lines.slice(headerEnd + 1).join('\n');
+
+            return { headers: headers.join('\n'), body };
+        }
+
+        // Rebuild ABC from components
+        function rebuildABC(headers, body) {
+            return headers + '\n' + body;
+        }
+
+        // Extract bars for processing
+        function getBars(body, count = 1) {
+            const bars = body.split('|').filter(b => b.trim() && !b.match(/^[\s:12]*$/));
+            return bars.slice(0, count);
+        }
+
+        // Find all occurrences of a lick pattern in the tune
+        function findLickOccurrences(body, lick) {
+            const cleanLick = lick.replace(/\s/g, '');
+            const bars = body.split('|');
+            const occurrences = [];
+
+            bars.forEach((bar, idx) => {
+                const cleanBar = bar.replace(/\s/g, '');
+                if (cleanBar.includes(cleanLick)) {
+                    occurrences.push({ barIndex: idx, bar: bar.trim() });
+                }
+            });
+
+            return occurrences;
+        }
+
+        // Apply melodic variation to multiple places (2-5 spots)
+        function applyMelodicMultiple(abc, variationType, targetLick = null) {
+            const { headers, body } = parseABC(abc);
+            const bars = body.split('|').filter(b => b.trim());
+
+            let modifiedBars = [...bars];
+            let appliedCount = 0;
+            let description = '';
+
+            if (targetLick) {
+                // Apply to specific lick only
+                modifiedBars = bars.map(bar => {
+                    if (bar.includes(targetLick.replace(/\s/g, ''))) {
+                        appliedCount++;
+                        return applyMelodicToBar(bar, variationType);
+                    }
+                    return bar;
+                });
+                description = `Applied to lick "${targetLick}" (${appliedCount} occurrences)`;
+            } else {
+                // Apply to 2-5 random spots
+                const numSpots = Math.floor(Math.random() * 4) + 2; // 2-5
+                const indices = [];
+                while (indices.length < Math.min(numSpots, bars.length)) {
+                    const idx = Math.floor(Math.random() * bars.length);
+                    if (!indices.includes(idx)) {
+                        indices.push(idx);
+                    }
+                }
+
+                indices.forEach(idx => {
+                    modifiedBars[idx] = applyMelodicToBar(modifiedBars[idx], variationType);
+                });
+
+                appliedCount = indices.length;
+                description = `Applied to ${appliedCount} different locations`;
+            }
+
+            const modifiedBody = '|' + modifiedBars.join('|') + '|';
+            return {
+                abc: rebuildABC(headers, modifiedBody),
+                description: description
+            };
+        }
+
+        // Apply melodic variation to a single bar
+        function applyMelodicToBar(bar, variationType) {
+            let varied = bar;
+
+            switch(variationType) {
+                case 'chromatic':
+                    // Add chromatic passing tones
+                    varied = varied.replace(/eA/g, 'e^fA').replace(/cd/g, 'c^cd');
+                    break;
+                case 'neighbor':
+                    // Neighbor tone substitution
+                    varied = varied.replace(/AA/g, 'AB').replace(/ee/g, 'ed');
+                    break;
+                case 'octave_displacement':
+                    // Move to higher octave
+                    varied = varied.replace(/e([^a'])/g, "e'$1").replace(/A(?![a-z'])/g, "a");
+                    break;
+                case 'rhythmic_shift':
+                    // Add rest at start
+                    varied = 'z/2 ' + varied.slice(0, -2);
+                    break;
+                case 'simplification':
+                    // Remove repeated notes
+                    varied = varied.replace(/AA/g, 'A2').replace(/ee/g, 'e2');
+                    break;
+            }
+
+            return varied;
+        }
+
+        // Harmony variation functions
+        const harmonyVariations = {
+            quartal_sparse: {
+                desc: "Quartal harmony on beats 1 and 5 - fourth intervals for modern sound",
+                apply: function(abc) {
+                    const { headers, body } = parseABC(abc);
+                    const bars = getBars(body, 2);
+
+                    let varied = bars[0].replace(/^e/, '[EA]').replace(/B/, '[BE]');
+
+                    return rebuildABC(headers, '|' + varied + '|' + (bars[1] || '') + '|');
+                }
+            },
+
+            quartal_two: {
+                desc: "Two-note quartal fourths throughout - most anglo-friendly approach",
+                apply: function(abc) {
+                    const { headers, body } = parseABC(abc);
+                    const bars = getBars(body, 2);
+
+                    let varied = bars[0].replace(/e/g, '[EA]').replace(/A/g, '[AD]');
+
+                    return rebuildABC(headers, '|' + varied + '|' + (bars[1] || '') + '|');
+                }
+            },
+
+            modal_drone: {
+                desc: "Static A-D drone underneath - emphasizes Dorian mode",
+                apply: function(abc) {
+                    const { headers, body } = parseABC(abc);
+                    const bars = getBars(body, 2);
+
+                    const varied = '[AD]3 ' + bars[0];
+
+                    return rebuildABC(headers, '|' + varied + '|' + (bars[1] || '') + '|');
+                }
+            },
+
+            diatonic_thirds: {
+                desc: "Diatonic thirds harmony - traditional approach",
+                apply: function(abc) {
+                    const { headers, body } = parseABC(abc);
+                    const bars = getBars(body, 2);
+
+                    let varied = bars[0].replace(/e([^a])/g, '[ec]$1').replace(/A/g, '[Ac]').replace(/B/g, '[Bd]');
+
+                    return rebuildABC(headers, '|' + varied + '|' + (bars[1] || '') + '|');
+                }
+            },
+
+            open_fifths: {
+                desc: "Open fifths - powerful, traditional sound",
+                apply: function(abc) {
+                    const { headers, body } = parseABC(abc);
+                    const bars = getBars(body, 2);
+
+                    let varied = bars[0].replace(/A/g, '[AE]').replace(/d/g, '[da]');
+
+                    return rebuildABC(headers, '|' + varied + '|' + (bars[1] || '') + '|');
+                }
+            }
+        };
+
+        // Melodic variation functions
+        const melodicVariations = {
+            chromatic: {
+                desc: "Chromatic passing tones - bebop-influenced approach"
+            },
+            neighbor: {
+                desc: "Neighbor tone substitution - traditional variation technique"
+            },
+            octave_displacement: {
+                desc: "Octave displacement - move phrases up/down an octave"
+            },
+            rhythmic_shift: {
+                desc: "Rhythmic displacement - shift note positions"
+            },
+            simplification: {
+                desc: "Simplification - reduce to essential notes"
+            }
+        };
+
+        async function generateVariations() {
+            try {
+                const abc = document.getElementById('abc-input').value;
+                const harmonyType = document.getElementById('harmony-select').value;
+                const melodicType = document.getElementById('melodic-select').value;
+                const targetLick = document.getElementById('lick-input').value.trim();
+
+                // Validate Session URL if Session tab is active
+                if (currentTab === 'session') {
+                    const sessionUrl = document.getElementById('session-url').value;
+                    if (!sessionUrl) {
+                        alert('Please provide a Session URL when using Session Variations');
+                        return;
+                    }
+                }
+
+                // Hide lucky output
+                document.getElementById('lucky-output').style.display = 'none';
+
+                // Call backend API
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        abc: abc,
+                        harmony_type: harmonyType,
+                        melodic_type: melodicType,
+                        lick: targetLick || null,
+                        validate_anglo: false
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Clear all previous outputs
+                document.getElementById('harmony-output').style.display = 'none';
+                document.getElementById('melodic-output').style.display = 'none';
+                document.getElementById('combined-output').style.display = 'none';
+                document.getElementById('lucky-output').style.display = 'none';
+                document.getElementById('session-output').style.display = 'none';
+
+                // Store all ABCs for playback
+                currentAbc = data.original;
+                variationAbcs.original = data.original;
+                variationAbcs.harmony = data.harmony || '';
+                variationAbcs.melodic = data.melodic || '';
+                variationAbcs.combined = data.combined || '';
+
+                console.log('[GENERATE] Stored ABCs:');
+                console.log('  - original:', variationAbcs.original ? 'YES' : 'NO');
+                console.log('  - harmony:', variationAbcs.harmony ? 'YES' : 'NO');
+                console.log('  - melodic:', variationAbcs.melodic ? 'YES' : 'NO');
+                console.log('  - combined:', variationAbcs.combined ? 'YES' : 'NO');
+                console.log('[GENERATE] Backend response:', data);
+
+                // Render original
+                ABCJS.renderAbc('original-notation', data.original, { responsive: 'resize' });
+
+                // Handle "Feeling Lucky" responses
+                if (data.harmony_lucky) {
+                    // Show 5 random harmony variations
+                    let luckyHTML = '';
+                    data.harmony_lucky.forEach((v, i) => {
+                        luckyHTML += `
+                            <div class="variation lucky-variation">
+                                <div class="description">
+                                    <strong>Harmony Variation ${i + 1}:</strong> ${v.description}
+                                </div>
+                                <div id="harmony-lucky-${i}" class="notation"></div>
+                                <div id="harmony-lucky-${i}-audio"></div>
+                                <button class="play-button" onclick="playLuckyVariation('harmony', ${i})">▶ Play</button>
+                            </div>
+                        `;
+                    });
+                    document.getElementById('lucky-variations').innerHTML = luckyHTML;
+                    document.getElementById('lucky-output').style.display = 'block';
+
+                    // Store and render all harmony lucky variations
+                    data.harmony_lucky.forEach((v, i) => {
+                        variationAbcs[`harmony-lucky-${i}`] = v.abc;
+                        ABCJS.renderAbc(`harmony-lucky-${i}`, v.abc, { responsive: 'resize' });
+                    });
+                } else if (data.melodic_lucky) {
+                    // Show 5 random melodic variations
+                    let luckyHTML = '';
+                    data.melodic_lucky.forEach((v, i) => {
+                        luckyHTML += `
+                            <div class="variation lucky-variation">
+                                <div class="description">
+                                    <strong>Melodic Variation ${i + 1}:</strong> ${v.description}
+                                </div>
+                                <div id="melodic-lucky-${i}" class="notation"></div>
+                                <div id="melodic-lucky-${i}-audio"></div>
+                                <button class="play-button" onclick="playLuckyVariation('melodic', ${i})">▶ Play</button>
+                            </div>
+                        `;
+                    });
+                    document.getElementById('lucky-variations').innerHTML = luckyHTML;
+                    document.getElementById('lucky-output').style.display = 'block';
+
+                    // Store and render all melodic lucky variations - only changed bars
+                    data.melodic_lucky.forEach((v, i) => {
+                        // Always store full ABC for playback
+                        variationAbcs[`melodic-lucky-${i}`] = v.abc;
+
+                        // But render only changed bars for display
+                        if (v.changed_bars && v.changed_bars.length > 0) {
+                            const { headers } = parseABC(data.original);
+                            let changedBarsABC = headers + '\n';
+                            v.changed_bars.forEach(bar => {
+                                changedBarsABC += '|' + bar.modified + '|';
+                            });
+                            ABCJS.renderAbc(`melodic-lucky-${i}`, changedBarsABC, { responsive: 'resize' });
+                        } else {
+                            ABCJS.renderAbc(`melodic-lucky-${i}`, v.abc, { responsive: 'resize' });
+                        }
+                    });
+                } else if (data.combined) {
+                    // Show combined if both were selected
+                    document.getElementById('combined-desc').textContent = data.combined_desc;
+                    ABCJS.renderAbc('combined-notation', data.combined, { responsive: 'resize' });
+                    document.getElementById('combined-output').style.display = 'block';
+                } else if (data.harmony) {
+                    // Show harmony variation
+                    document.getElementById('harmony-desc').textContent = data.harmony_desc;
+                    ABCJS.renderAbc('harmony-notation', data.harmony, { responsive: 'resize' });
+                    document.getElementById('harmony-output').style.display = 'block';
+                } else if (data.melodic) {
+                    // Show melodic variation - only changed bars
+                    document.getElementById('melodic-desc').textContent = data.melodic_desc;
+
+                    if (data.melodic_changed_bars && data.melodic_changed_bars.length > 0) {
+                        // Render only the changed bars
+                        const { headers } = parseABC(data.original);
+                        let changedBarsABC = headers + '\n';
+                        data.melodic_changed_bars.forEach(bar => {
+                            changedBarsABC += '|' + bar.modified + '|';
+                        });
+                        ABCJS.renderAbc('melodic-notation', changedBarsABC, { responsive: 'resize' });
+                    } else {
+                        ABCJS.renderAbc('melodic-notation', data.melodic, { responsive: 'resize' });
+                    }
+
+                    document.getElementById('melodic-output').style.display = 'block';
+                }
+
+                // Session variations
+                if (currentTab === 'session') {
+                    const sessionUrl = document.getElementById('session-url').value;
+                    if (sessionUrl) {
+                        await analyzeSession(sessionUrl);
+                    }
+                } else {
+                    document.getElementById('session-output').style.display = 'none';
+                }
+
+                // Show output
+                document.getElementById('output').style.display = 'block';
+
+            } catch (error) {
+                console.error('Error generating variations:', error);
+                document.getElementById('output').innerHTML = `
+                    <div class="error">
+                        Error generating variations: ${error.message}
+                        <br>Check console for details.
+                    </div>
+                `;
+                document.getElementById('output').style.display = 'block';
+            }
+        }
+
+        async function feelingLucky() {
+            const abc = document.getElementById('abc-input').value;
+
+            try {
+                // Clear all previous outputs
+                document.getElementById('harmony-output').style.display = 'none';
+                document.getElementById('melodic-output').style.display = 'none';
+                document.getElementById('combined-output').style.display = 'none';
+                document.getElementById('session-output').style.display = 'none';
+
+                // Render original
+                ABCJS.renderAbc('original-notation', abc, { responsive: 'resize' });
+
+                // Call backend API
+                const response = await fetch('/feeling-lucky', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        abc: abc,
+                        validate_anglo: false
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Store original ABC
+                variationAbcs.original = abc;
+
+                // Render lucky variations
+                let luckyHTML = '';
+                data.variations.forEach((v, i) => {
+                    luckyHTML += `
+                        <div class="variation lucky-variation">
+                            <div class="description">
+                                <strong>Variation ${i + 1}:</strong> ${v.description}
+                            </div>
+                            <div id="lucky-${i}" class="notation"></div>
+                            <div id="lucky-${i}-audio"></div>
+                            <button class="play-button" onclick="playLuckyVariation('combined-lucky', ${i})">▶ Play</button>
+                        </div>
+                    `;
+                });
+
+                document.getElementById('lucky-variations').innerHTML = luckyHTML;
+                document.getElementById('lucky-output').style.display = 'block';
+
+                // Store and render all lucky variations
+                data.variations.forEach((v, i) => {
+                    variationAbcs[`combined-lucky-${i}`] = v.abc;
+                    ABCJS.renderAbc('lucky-' + i, v.abc, { responsive: 'resize' });
+                });
+
+                // Show output
+                document.getElementById('output').style.display = 'block';
+
+            } catch (error) {
+                console.error('Error generating lucky variations:', error);
+                document.getElementById('output').innerHTML = `
+                    <div class="error">
+                        Error generating lucky variations: ${error.message}
+                        <br>Check console for details.
+                    </div>
+                `;
+                document.getElementById('output').style.display = 'block';
+            }
+        }
+
+        async function analyzeSession(url) {
+            try {
+                document.getElementById('session-content').innerHTML = '<p>Loading from The Session...</p>';
+                document.getElementById('session-output').style.display = 'block';
+
+                const response = await fetch('/analyze-session', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url: url})
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    document.getElementById('session-content').innerHTML = `
+                        <div class="error">
+                            <strong>Error:</strong> ${data.message}<br>
+                            ${data.error}
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Build analysis display
+                let html = `
+                    <h4>${data.title}</h4>
+                    <p><strong>Type:</strong> ${data.type} | <strong>Key:</strong> ${data.key}</p>
+                    <p><strong>Settings found:</strong> ${data.num_settings}</p>
+                `;
+
+                if (data.comparison) {
+                    const comp = data.comparison;
+
+                    if (comp.message) {
+                        html += `<p><em>${comp.message}</em></p>`;
+                    } else {
+                        html += `
+                            <h5>Variation Analysis</h5>
+                            <ul>
+                                <li><strong>Bars analyzed:</strong> ${comp.num_bars_analyzed}</li>
+                                <li><strong>Bars that vary:</strong> ${comp.differences.length}</li>
+                                <li><strong>Stability score:</strong> ${(comp.stability_score * 100).toFixed(1)}%</li>
+                            </ul>
+                        `;
+
+                        if (comp.example_changes && comp.example_changes.length > 0) {
+                            html += '<h5>Example Variations:</h5>';
+                            comp.example_changes.forEach(ex => {
+                                html += `<div style="margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-left: 3px solid #666;">`;
+                                html += `<strong>Bar ${ex.bar_number}:</strong><br>`;
+                                ex.examples.forEach((bar, idx) => {
+                                    html += `<code style="display: block; margin: 5px 0; padding: 5px; background: white;">Version ${idx + 1}: ${bar}</code>`;
+                                });
+                                html += `</div>`;
+                            });
+                        } else if (comp.differences.length > 0) {
+                            html += '<h5>Varying Bars:</h5><ul>';
+                            comp.differences.slice(0, 5).forEach(diff => {
+                                html += `<li>Bar ${diff.bar_number}: ${diff.num_variations} different versions</li>`;
+                            });
+                            html += '</ul>';
+                        }
+
+                        if (comp.unique_approaches && comp.unique_approaches.length > 0) {
+                            html += '<h5>Unique Techniques Used:</h5><ul>';
+                            comp.unique_approaches.forEach(approach => {
+                                html += `<li><strong>${approach.technique}</strong>: ${approach.description} (Settings: ${approach.settings.join(', ')})</li>`;
+                            });
+                            html += '</ul>';
+                        }
+                    }
+                }
+
+                // Show first few ABC settings
+                if (data.settings && data.settings.length > 0) {
+                    html += '<h5>Settings:</h5>';
+                    data.settings.slice(0, 3).forEach((setting, i) => {
+                        html += `
+                            <details>
+                                <summary>Setting ${i + 1}</summary>
+                                <pre style="background: #f5f5f5; padding: 10px; overflow-x: auto;">${setting}</pre>
+                            </details>
+                        `;
+                    });
+                    if (data.settings.length > 3) {
+                        html += `<p><em>...and ${data.settings.length - 3} more settings</em></p>`;
+                    }
+                }
+
+                document.getElementById('session-content').innerHTML = html;
+                document.getElementById('session-output').style.display = 'block';
+
+            } catch (error) {
+                console.error('Error analyzing session:', error);
+                document.getElementById('session-content').innerHTML = `
+                    <div class="error">
+                        Error analyzing Session URL: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        async function transformationPrompts() {
+            const abc = document.getElementById('abc-input').value;
+            if (!abc) {
+                alert('Please provide ABC notation first');
+                return;
+            }
+
+            // Hide other outputs
+            document.getElementById('harmony-output').style.display = 'none';
+            document.getElementById('melodic-output').style.display = 'none';
+            document.getElementById('combined-output').style.display = 'none';
+            document.getElementById('session-output').style.display = 'none';
+
+            // Show loading state
+            document.getElementById('lucky-output').style.display = 'block';
+            document.getElementById('lucky-variations').innerHTML = '<p>🎨 Generating style transformations using AI... This may take 30-60 seconds...</p>';
+
+            try {
+                // Request 5 different styles
+                const styles = ['drone_minimalist', 'groove_fusion', 'ambient_chamber', 'bebop_jazz', 'baroque'];
+
+                const response = await fetch('/transform-styles', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        abc: abc,
+                        styles: styles
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.error) {
+                    document.getElementById('lucky-variations').innerHTML = `
+                        <div class="error">
+                            <strong>Error:</strong> ${data.message}<br>
+                            ${data.error}
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Display transformations
+                let html = '<h3>🎨 Style Transformations</h3>';
+                data.transformations.forEach((trans, i) => {
+                    const styleNames = {
+                        'drone_minimalist': 'Drone Minimalist',
+                        'groove_fusion': 'Groove Fusion',
+                        'ambient_chamber': 'Ambient Chamber',
+                        'bebop_jazz': 'Bebop Jazz',
+                        'baroque': 'Baroque'
+                    };
+
+                    html += `
+                        <div class="variation lucky-variation">
+                            <div class="description">
+                                <strong>${styleNames[trans.style]}:</strong> ${trans.description}
+                            </div>
+                            <div id="style-${i}" class="notation"></div>
+                            <button class="play-button" onclick="playLuckyVariation('style', ${i})">▶ Play</button>
+                        </div>
+                    `;
+
+                    // Store ABC for playback
+                    variationAbcs[`style-lucky-${i}`] = trans.abc;
+                });
+
+                document.getElementById('lucky-variations').innerHTML = html;
+
+                // Render all transformations
+                data.transformations.forEach((trans, i) => {
+                    ABCJS.renderAbc(`style-${i}`, trans.abc, { responsive: 'resize' });
+                });
+
+            } catch (error) {
+                console.error('Error generating transformations:', error);
+                document.getElementById('lucky-variations').innerHTML = `
+                    <div class="error">
+                        Error generating style transformations: ${error.message}
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
