@@ -15,6 +15,10 @@
             <button class="back-button" onclick="window.location.href='index.html'">← Back to Index</button>
         </div>
 
+        <div class="section warning">
+            <strong>⚠️ Warning:</strong> This section is experimental. Use at your own risk.
+        </div>
+
         <div class="section">
             <div class="input-group">
                 <label for="abc-input">ABC Notation:</label>
@@ -34,11 +38,13 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                 <label for="harmony-select">Harmony Type:</label>
                 <select id="harmony-select">
                     <optgroup label="Fundamental Voicings">
+                        <option value="simple_chord_changes">Simple Chord Changes</option>
                         <option value="fifth_drone_bass">Fifth Drone Bass</option>
                         <option value="root_fifth_power_chords">Root-Fifth Power Chords</option>
                         <option value="strategic_bass_notes">Strategic Bass Notes</option>
                         <option value="octave_doubling">Octave Doubling</option>
                         <option value="thirds_harmony">Thirds Harmony</option>
+                        <option value="simple_chord_progression">Simple I-IV-V Chords</option>
                     </optgroup>
                     <optgroup label="Drone & Sustained">
                         <option value="tonic_drone_sustain">Tonic Drone Sustain</option>

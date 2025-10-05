@@ -92,6 +92,34 @@ Transform this ABC notation by adding harmony in thirds in ABC format:
 Output ONLY the complete transformed ABC notation with thirds harmony added.
 """,
 
+    "simple_chord_progression": """
+Transform this ABC notation by adding simple I-IV-V chord progressions in ABC format:
+- Use simple I-IV-V (tonic-subdominant-dominant) progressions with occasional vi (relative minor)
+- Example in G major: G-Em-C-D corresponds to I-vi-IV-V
+- Example in A minor: Am-Dm-Em corresponds to i-iv-v
+- Add chord notes using square brackets on strong beats: [GBd] for G major, [ACE] for A minor
+- Place chords at phrase beginnings/endings and cadence points
+- Example: "GAB cde|" becomes "[GBd]GAB [ceg]cde|" (I chord, then V chord)
+- Keep it simple - use root position triads (root, third, fifth)
+Output ONLY the complete transformed ABC notation with chord progression added.
+""",
+
+    "simple_chord_changes": """
+Transform this ABC notation by analyzing the melody and adding anglo concertina chord voicings:
+- Analyze the melody to identify what chords fit each section (I, IV, V, vi, etc.)
+- When the chord changes (and on the first note of the piece), replace the melody note with 2-3 chord notes using square brackets
+- Write the chord name above each chord change using ABC notation: "Am" for chord annotations
+- Use anglo concertina-appropriate voicings: limit to 2-3 notes maximum
+- Example in A Dorian: if bar starts with "eAA Bcd" and chord is Am, replace with "\"Am\"[ACE]AA Bcd|"
+- Example chord change: "|eAA Bcd|" becomes "|\"Am\"[ACE]AA Bcd|" then next bar "|\"Dm\"[DFA] eaf ged|" if chord changes to Dm
+- Common chords for A Dorian: Am, Dm, G, C
+- Common chords for D Major: D, G, A, Bm
+- Common chords for D Mixolydian: D, C, G, Am
+- Common chords for G Major: G, C, D, Em
+- Keep rhythm natural - chord voicing should fit the same duration as the note it replaces
+Output ONLY the complete transformed ABC notation with chord changes added.
+""",
+
     "bass_line": """
 Transform this ABC notation by adding a simple walking bass line in ABC format:
 - Add bass notes that move stepwise or by small intervals

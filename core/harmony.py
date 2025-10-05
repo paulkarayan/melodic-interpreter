@@ -321,6 +321,132 @@ def apply_countermelody(abc: str) -> str:
     return rebuild_abc(headers, result_body)
 
 
+def apply_simple_chord_changes(abc: str) -> str:
+    """
+    Simple chord changes - analyze melody to identify chords and add chord notes
+    on chord changes with chord names above
+
+    Returns ABC with:
+    1. Chord notes (2-3 notes) replacing melody notes at chord changes
+    2. Chord names as annotations above each change
+    """
+    headers, body = parse_abc(abc)
+
+    # Extract key from headers
+    key_match = re.search(r'K:([A-G][#b]?)(maj|min|m|dor|mix|lyd|phr|loc)?', headers)
+    if not key_match:
+        return abc  # Can't proceed without key
+
+    key_root = key_match.group(1)
+    mode = key_match.group(2) or ''
+
+    # Define chord tones for common keys (simplified for anglo concertina)
+    # Format: {note: (chord_name, [chord_notes])}
+    chord_map = {
+        'A': {
+            'dor': {  # A Dorian (like Sliabh Russell)
+                'A': ('Am', ['A', 'c', 'e']),
+                'e': ('Am', ['A', 'c', 'e']),
+                'c': ('C', ['C', 'E', 'G']),
+                'E': ('C', ['C', 'E', 'G']),
+                'G': ('C', ['C', 'E', 'G']),
+                'd': ('Dm', ['D', 'F', 'A']),
+                'D': ('Dm', ['D', 'F', 'A']),
+                'F': ('Dm', ['D', 'F', 'A']),
+                'B': ('G', ['G', 'B', 'd']),
+                'g': ('G', ['G', 'B', 'd']),
+            }
+        },
+        'D': {
+            '': {  # D Major
+                'D': ('D', ['D', '^F', 'A']),
+                'd': ('D', ['D', '^F', 'A']),
+                'A': ('A', ['A', '^C', 'E']),
+                'a': ('A', ['A', '^C', 'E']),
+                'G': ('G', ['G', 'B', 'D']),
+                'g': ('G', ['G', 'B', 'D']),
+                '^F': ('D', ['D', '^F', 'A']),
+                '^f': ('D', ['D', '^F', 'A']),
+            },
+            'mix': {  # D Mixolydian
+                'D': ('D', ['D', '^F', 'A']),
+                'd': ('D', ['D', '^F', 'A']),
+                'A': ('A', ['A', '^C', 'E']),
+                'a': ('A', ['A', '^C', 'E']),
+                'G': ('G', ['G', 'B', 'D']),
+                'g': ('G', ['G', 'B', 'D']),
+                'C': ('C', ['C', 'E', 'G']),
+                'c': ('C', ['C', 'E', 'G']),
+            }
+        },
+        'G': {
+            '': {  # G Major
+                'G': ('G', ['G', 'B', 'D']),
+                'g': ('G', ['G', 'B', 'D']),
+                'D': ('D', ['D', '^F', 'A']),
+                'd': ('D', ['D', '^F', 'A']),
+                'C': ('C', ['C', 'E', 'G']),
+                'c': ('C', ['C', 'E', 'G']),
+                'E': ('Em', ['E', 'G', 'B']),
+                'e': ('Em', ['E', 'G', 'B']),
+            }
+        }
+    }
+
+    # Get chord map for this key
+    chords = chord_map.get(key_root, {}).get(mode, chord_map.get(key_root, {}).get('', {}))
+    if not chords:
+        return abc  # Unsupported key
+
+    # Process the body note by note
+    result = []
+    current_chord = None
+    i = 0
+
+    while i < len(body):
+        char = body[i]
+
+        # Check if this is a note (A-G or a-g, possibly with accidentals)
+        note_match = re.match(r'([_=\^]*)([A-Ga-g])', body[i:])
+        if note_match:
+            accidental = note_match.group(1)
+            note = note_match.group(2)
+            full_note = accidental + note
+
+            # Look up chord for this note
+            chord_info = chords.get(full_note) or chords.get(note)
+
+            if chord_info:
+                chord_name, chord_notes = chord_info
+
+                # Is this a chord change?
+                if chord_name != current_chord:
+                    # Add chord annotation and notes
+                    result.append(f'"^{chord_name}"')
+                    # Use 2-3 chord notes (anglo-friendly)
+                    if len(chord_notes) >= 3:
+                        result.append(f'[{chord_notes[0]}{chord_notes[1]}{chord_notes[2]}]')
+                    elif len(chord_notes) == 2:
+                        result.append(f'[{chord_notes[0]}{chord_notes[1]}]')
+                    else:
+                        result.append(f'{chord_notes[0]}')
+
+                    current_chord = chord_name
+                    i += len(note_match.group(0))
+                    continue
+
+            # Not a chord change, keep the note as-is
+            result.append(full_note)
+            i += len(note_match.group(0))
+        else:
+            # Not a note (bar line, rhythm, etc.)
+            result.append(char)
+            i += 1
+
+    result_body = ''.join(result)
+    return rebuild_abc(headers, result_body)
+
+
 # Harmony function registry
 HARMONY_FUNCTIONS = {
     # Traditional
@@ -343,6 +469,7 @@ HARMONY_FUNCTIONS = {
     'beat_emphasis': apply_beat_emphasis,
     'jig_rhythm': apply_jig_rhythm,
     'chord_changes': apply_chord_changes,
+    'simple_chord_changes': apply_simple_chord_changes,
 }
 
 HARMONY_DESCRIPTIONS = {
@@ -366,4 +493,5 @@ HARMONY_DESCRIPTIONS = {
     'beat_emphasis': "Beat emphasis - harmony on strong beats only",
     'jig_rhythm': "Jig rhythm - emphasize beats 1, 3+4, 5+1 (6/8 specific)",
     'chord_changes': "Chord changes - modal chord progressions (Am, Dm, G)",
+    'simple_chord_changes': "Simple chord changes - analyze melody and add concertina chord voicings (2-3 notes) with chord names when harmony changes",
 }
