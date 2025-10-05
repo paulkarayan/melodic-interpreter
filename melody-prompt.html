@@ -140,7 +140,7 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
     </div>
 
     <script type="module">
-        import { playVariation, stopAllPlayback, renderAbc } from './shared/playback.js';
+        import { playVariation, stopAllPlayback, renderAbc, renderAbcWrapped } from './shared/playback.js';
 
         // State
         let variationAbcs = {};
@@ -208,7 +208,7 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                 };
 
                 // Render original
-                renderAbc('original-notation', data.original);
+                renderAbcWrapped('original-notation', data.original);
 
                 // Extract headers from original
                 const lines = data.original.split('\n');
@@ -223,14 +223,20 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
 
                 // Render changed bars as separate snippets (like melody.html)
                 if (data.changed_bars && data.changed_bars.length > 0) {
-                    // Group bars by their modified content
+                    // Group bars by their modified content (normalize by removing repeat markers)
                     const groupedBars = {};
                     data.changed_bars.forEach(bar => {
-                        const key = bar.modified;
+                        // Normalize by removing leading/trailing colons and whitespace
+                        const normalizedModified = bar.modified.replace(/^:\s*|\s*:$/g, '').trim();
+                        const normalizedOriginal = bar.original.replace(/^:\s*|\s*:$/g, '').trim();
+
+                        const key = normalizedModified;
                         if (!groupedBars[key]) {
                             groupedBars[key] = {
                                 modified: bar.modified,
                                 original: bar.original,
+                                normalizedModified: normalizedModified,
+                                normalizedOriginal: normalizedOriginal,
                                 bars: []
                             };
                         }
@@ -251,11 +257,13 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                         html += `
                             <div class="section variation" style="margin-top: 20px;">
                                 <h4>Variation ${variationIndex + 1}</h4>
-                                <p class="description">${barList}: ${group.original} → ${group.modified}</p>
+                                <p class="description">${barList}: ${group.normalizedOriginal} → ${group.normalizedModified}</p>
                                 <div id="snippet-${variationIndex}" class="notation"></div>
+                                <div id="full-tune-${variationIndex}" class="notation" style="margin-top: 15px;"></div>
                                 <div style="margin-top: 10px;">
-                                    <button class="play-button" onclick="playSnippet(${variationIndex})">▶ Play</button>
+                                    <button class="play-button" onclick="playSnippet(${variationIndex})">▶ Play Snippet</button>
                                     <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                                    <button class="play-button" onclick="playFullTune(${variationIndex})">▶ Play in Full Tune</button>
                                 </div>
                             </div>
                         `;
@@ -264,11 +272,21 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
 
                     document.getElementById('transformations-container').innerHTML = html;
 
-                    // Render all snippets
+                    // Render all snippets and full tunes
                     variationIndex = 0;
                     Object.values(groupedBars).forEach(group => {
+                        // Render snippet
                         const snippetABC = headers + '\n|' + group.modified + '|';
+                        variationAbcs[`snippet-${variationIndex}`] = snippetABC;
                         renderAbc(`snippet-${variationIndex}`, snippetABC);
+
+                        // Create full tune with variation substituted and highlighted
+                        const fullTuneABC = createFullTuneWithVariation(data.original, data.changed_bars, group.bars);
+                        variationAbcs[`full-tune-${variationIndex}`] = fullTuneABC;
+
+                        // Render full tune with wrap to prevent horizontal overflow
+                        renderAbcWrapped(`full-tune-${variationIndex}`, fullTuneABC);
+
                         variationIndex++;
                     });
                 } else {
@@ -380,6 +398,11 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
             playVariation(`snippet-${index}`, variationAbcs, tempo);
         };
 
+        window.playFullTune = function(index) {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation(`full-tune-${index}`, variationAbcs, tempo);
+        };
+
         window.playFullTransformation = function() {
             const tempo = parseInt(document.getElementById('tempo-value').value);
             playVariation('full-transformation', variationAbcs, tempo);
@@ -393,6 +416,79 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
         window.stopPlayback = function() {
             stopAllPlayback();
         };
+
+        // Helper: Create full tune with variation substituted and annotation markers
+        function createFullTuneWithVariation(originalABC, changedBars, targetBarNumbers) {
+            const lines = originalABC.split('\n');
+            const headerEnd = lines.findIndex(l => l.startsWith('K:'));
+            const headers = lines.slice(0, headerEnd + 1).join('\n');
+            const bodyLines = lines.slice(headerEnd + 1);
+            const body = bodyLines.join('\n').replace(/\s+/g, ' ').trim();
+
+            const modifications = {};
+            changedBars.forEach(cb => {
+                if (targetBarNumbers.includes(cb.bar_number)) {
+                    modifications[cb.bar_number] = cb.modified;
+                }
+            });
+
+            const parts = body.split('|');
+            let result = headers + '\n';
+            let currentBarNum = 0;
+
+            for (let i = 0; i < parts.length; i++) {
+                let part = parts[i].trim();
+
+                if (i > 0) {
+                    result += '|';
+                }
+
+                if (!part) {
+                    continue;
+                }
+
+                const startsWithRepeat = part.startsWith(':');
+                const endsWithRepeat = part.endsWith(':');
+
+                if (startsWithRepeat) {
+                    result += ':';
+                    part = part.substring(1).trim();
+                }
+
+                if (part && part !== ':') {
+                    currentBarNum++;
+
+                    let barContent = part;
+                    let isModified = false;
+
+                    if (modifications[currentBarNum]) {
+                        barContent = modifications[currentBarNum];
+                        isModified = true;
+                    } else {
+                        for (const [barNum, modifiedContent] of Object.entries(modifications)) {
+                            const originalForBar = changedBars.find(cb => cb.bar_number === parseInt(barNum))?.original;
+                            if (originalForBar && part.includes(originalForBar.trim())) {
+                                barContent = modifiedContent;
+                                isModified = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (isModified) {
+                        result += `"^VARIED"${barContent}`;
+                    } else {
+                        result += barContent;
+                    }
+                }
+
+                if (endsWithRepeat && !startsWithRepeat) {
+                    result += ':';
+                }
+            }
+
+            return result;
+        }
 
         // Error handling
         function showError(message) {

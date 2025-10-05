@@ -95,12 +95,36 @@ export function stopAllPlayback() {
  * @param {string} elementId - ID of DOM element to render into
  * @param {string} abc - ABC notation string
  */
-export function renderAbc(elementId, abc) {
+export function renderAbc(elementId, abc, options = {}) {
     console.log(`[RENDER] Rendering ABC to #${elementId}`);
     if (!abc) {
         console.error(`[RENDER ERROR] No ABC provided for #${elementId}`);
         return;
     }
-    ABCJS.renderAbc(elementId, abc, { responsive: 'resize' });
+
+    const defaultOptions = { responsive: 'resize' };
+    const mergedOptions = { ...defaultOptions, ...options };
+
+    ABCJS.renderAbc(elementId, abc, mergedOptions);
     console.log(`[RENDER] Successfully rendered to #${elementId}`);
+}
+
+export function renderAbcWrapped(elementId, abc) {
+    console.log(`[RENDER] Rendering wrapped ABC to #${elementId}`);
+    const element = document.getElementById(elementId);
+    if (!element) {
+        console.error(`[RENDER ERROR] Element #${elementId} not found`);
+        return;
+    }
+
+    const containerWidth = element.parentElement?.offsetWidth || 800;
+
+    renderAbc(elementId, abc, {
+        staffwidth: containerWidth - 40,
+        wrap: {
+            minSpacing: 1.5,
+            maxSpacing: 2.5,
+            preferredMeasuresPerLine: 4
+        }
+    });
 }
