@@ -77,36 +77,29 @@ def extract_all_abc_settings(html: str) -> List[str]:
     if not SCRAPING_AVAILABLE:
         raise ImportError("beautifulsoup4 required")
 
+    soup = BeautifulSoup(html, 'html.parser')
     abc_notations = []
 
-    # The Session stores ABC notation in the raw HTML with <br /> tags
-    # Find all occurrences of ABC notation patterns (starts with X:)
-    pattern = r'X:\s*\d+<br\s*/>'
-    matches = re.finditer(pattern, html)
+    # The Session stores ABC in <div class="notes"> inside <div role="tabpanel" class="setting-abc">
+    abc_divs = soup.find_all('div', class_='notes')
 
-    for match in matches:
-        start_idx = match.start()
+    for div in abc_divs:
+        # Get the HTML content
+        abc_html = str(div)
 
-        # Find the end of this ABC block (usually ends before next X: or certain closing tags)
-        end_markers = [
-            html.find('X:', start_idx + 10),  # Next ABC block
-            html.find('</div>', start_idx),    # Closing div
-            html.find('<div', start_idx + 10), # Next div
-            start_idx + 2000  # Max length safety
-        ]
-        end_idx = min([e for e in end_markers if e > start_idx])
+        # Convert <br> tags to newlines
+        abc_html = abc_html.replace('<br>', '\n').replace('<br/>', '\n').replace('<br />', '\n')
 
-        abc_html = html[start_idx:end_idx]
+        # Remove all HTML tags
+        abc_text = re.sub(r'<[^>]+>', '', abc_html)
 
-        # Convert <br /> to newlines and strip HTML
-        soup = BeautifulSoup(abc_html, 'html.parser')
-        abc_text = soup.get_text()
-        abc_text = abc_html.replace('<br />', '\n').replace('<br/>', '\n').replace('<br>', '\n')
+        # Clean up: remove "Title", "Type", etc. labels
+        abc_text = re.sub(r'\b(Number|Title|Type|Meter|Length|Key)\b:\s*', '', abc_text)
 
-        # Clean up HTML tags
-        abc_text = re.sub(r'<[^>]+>', '', abc_text)
+        # Clean up whitespace
         abc_text = abc_text.strip()
 
+        # Validate it looks like ABC notation
         if abc_text and 'X:' in abc_text and 'K:' in abc_text:
             abc_notations.append(abc_text)
 

@@ -22,6 +22,12 @@
                 <small style="color: #666;">Enter a tune URL from thesession.org to analyze variations</small>
             </div>
 
+            <div class="input-group">
+                <label for="abc-input">Your Key/ABC (optional):</label>
+                <textarea id="abc-input" placeholder="K:Ador&#10;or paste your full ABC...">K:Ador</textarea>
+                <small style="color: #666;">Provide just the key (e.g., K:Ador) or your full ABC to transpose examples to match</small>
+            </div>
+
             <button onclick="analyzeVariations()">Analyze Variations</button>
         </div>
 
@@ -96,11 +102,14 @@
             document.getElementById('output-section').style.display = 'block';
 
             try {
+                const abc = document.getElementById('abc-input').value.trim();
+
                 const response = await fetch('/analyze-session-variations', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        url: url
+                        url: url,
+                        user_abc: abc || null
                     })
                 });
 
@@ -119,10 +128,14 @@
                     return;
                 }
 
-                // Display tune metadata
-                document.getElementById('tune-title').textContent = data.title;
+                // Display tune metadata with Session link
+                const sessionUrl = document.getElementById('session-url').value.trim();
+                document.getElementById('tune-title').innerHTML = `
+                    ${data.title}
+                    <a href="${sessionUrl}" target="_blank" style="font-size: 0.6em; margin-left: 10px;">🔗 View on The Session</a>
+                `;
                 document.getElementById('tune-metadata').textContent =
-                    `${data.type} in ${data.key} | ${data.num_settings} settings analyzed`;
+                    `${data.type} in ${data.key} | ${data.num_analyzed || data.num_settings} out of ${data.num_settings} settings analyzed`;
 
                 // Display narrative
                 document.getElementById('narrative-content').textContent = data.narrative;
@@ -131,28 +144,38 @@
                 variationAbcs = {};
                 document.getElementById('examples-container').innerHTML = '';
 
-                // Render examples with play buttons
+                // Render examples with play buttons and full scores
                 if (data.examples && data.examples.length > 0) {
                     let html = '<div class="section"><h3>Musical Examples</h3></div>';
 
                     data.examples.forEach((example, i) => {
-                        variationAbcs[`example-${i}`] = example.abc;
+                        // Ensure ABC has proper newlines (unescape if needed)
+                        const abc = example.abc.replace(/\\n/g, '\n');
+                        variationAbcs[`example-${i}`] = abc;
+
+                        // Build Session setting reference if setting_number is provided
+                        const settingRef = example.setting_number
+                            ? ` (from Setting ${example.setting_number})`
+                            : '';
 
                         html += `
                             <div class="section variation">
-                                <h4>${example.title}</h4>
+                                <h4>${example.title}${settingRef}</h4>
                                 <p class="description">${example.description}</p>
                                 <div id="example-${i}" class="notation"></div>
                                 <button class="play-button" onclick="playExample(${i})">▶ Play</button>
+                                <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
                             </div>
                         `;
                     });
 
                     document.getElementById('examples-container').innerHTML = html;
 
-                    // Render all examples
+                    // Render all examples (full scores, not snippets)
                     data.examples.forEach((example, i) => {
-                        renderAbc(`example-${i}`, example.abc);
+                        // Ensure ABC has proper newlines (unescape if needed)
+                        const abc = example.abc.replace(/\\n/g, '\n');
+                        renderAbc(`example-${i}`, abc);
                     });
                 }
 

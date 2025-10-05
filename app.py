@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 import random
 import os
+import re
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -371,6 +372,7 @@ class MelodyTransformLuckyRequest(BaseModel):
 
 class SessionVariationAnalysisRequest(BaseModel):
     url: str
+    user_abc: Optional[str] = None
 
 
 class OrnamentationRequest(BaseModel):
@@ -560,17 +562,35 @@ async def analyze_session_variations(req: SessionVariationAnalysisRequest):
         # Get all ABC settings
         settings = tune_data['settings']
 
+        # Transpose all settings to user's key if provided
+        user_key = None
+        if req.user_abc:
+            # Extract key from user ABC
+            key_match = re.search(r'K:\s*([^\n]+)', req.user_abc)
+            if key_match:
+                user_key = key_match.group(1).strip()
+
         # Build prompt for AI analysis
+        transpose_note = ""
+        if user_key:
+            transpose_note = f"""
+CRITICAL: The user wants to work in {user_key}.
+Before your analysis, transpose ALL {len(settings)} settings above to {user_key}.
+Use the transposed versions for your analysis and examples.
+"""
+
         prompt = f"""You are analyzing variations of the Irish tune "{tune_data['title']}" ({tune_data['type']} in {tune_data['key']}).
 
-Here are {len(settings)} different settings/versions of this tune from The Session:
+Here are ALL {len(settings)} different settings/versions of this tune from The Session:
 
 """
 
         for i, setting in enumerate(settings, 1):
             prompt += f"\n--- Setting {i} ---\n{setting}\n"
 
-        prompt += """
+        prompt += f"""
+{transpose_note}
+
 Analyze these variations and write a narrative analysis (3-4 paragraphs) describing:
 
 1. What variation techniques are being used across these settings (e.g., neighbor tones, phrase ending changes, rhythmic variations, octave displacement, intervallic changes, etc.)
@@ -583,20 +603,41 @@ Analyze these variations and write a narrative analysis (3-4 paragraphs) describ
 
 Write in an engaging, educational tone suitable for musicians learning about variation techniques. Be specific and reference actual musical content from the settings.
 
-After your narrative analysis, provide 3-5 musical examples in this exact JSON format:
+After your narrative analysis, select 3-5 of the most interesting and pedagogically valuable settings as examples:
 
-{
+{{
   "narrative": "your narrative text here",
   "examples": [
-    {
-      "title": "Example 1: Phrase Ending Variation",
-      "description": "Brief description of what this example demonstrates",
-      "abc": "valid ABC notation showing just the relevant bars"
-    }
+    {{
+      "title": "Setting 1",
+      "description": "Brief description of what variation technique this setting demonstrates",
+      "abc": "COPY THE ENTIRE SETTING 1 ABC VERBATIM - every single character exactly as shown above",
+      "setting_number": 1
+    }},
+    {{
+      "title": "Setting 3",
+      "description": "Brief description of what variation technique this setting demonstrates",
+      "abc": "COPY THE ENTIRE SETTING 3 ABC VERBATIM - every single character exactly as shown above",
+      "setting_number": 3
+    }}
   ]
-}
+}}
 
-IMPORTANT: Return ONLY valid JSON, nothing else."""
+CRITICAL REQUIREMENTS - READ CAREFULLY:
+- Your examples MUST be literal copies of the settings shown above (Setting 1, Setting 2, Setting 3, etc.)
+- For the "abc" field:
+  * If user provided a key (e.g., K:Ador), transpose the ENTIRE setting to that key first
+  * Then copy the complete transposed ABC notation
+  * DO NOT modify anything else - just transpose key if needed
+- For the "title" field: Just use "Setting X" where X is the setting number you copied
+- For the "description" field: Explain what variation technique THIS ACTUAL SETTING demonstrates
+- The "setting_number" must match which setting you copied from the list above
+- DO NOT create hybrid examples, DO NOT make up new variations
+- Select 3-5 settings that best illustrate different variation techniques
+- Use DOUBLE QUOTES for all strings, never single quotes
+- NO trailing commas after the last item in arrays or objects
+- Escape special characters in strings (use \\n for newlines in ABC notation)
+- Return ONLY valid JSON that can be parsed by JSON.parse(), nothing else before or after"""
 
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -619,13 +660,22 @@ IMPORTANT: Return ONLY valid JSON, nothing else."""
 
         # Parse JSON response
         import json
-        analysis = json.loads(response_text)
+        try:
+            analysis = json.loads(response_text)
+        except json.JSONDecodeError as je:
+            print(f"[ERROR] JSON Parse Error: {je}")
+            print(f"[ERROR] Response text:\n{response_text[:500]}...")
+            return {
+                'error': f'Invalid JSON format from AI: {str(je)}',
+                'message': 'Failed to parse AI response'
+            }
 
         return {
             'title': tune_data['title'],
             'type': tune_data['type'],
             'key': tune_data['key'],
             'num_settings': len(settings),
+            'num_analyzed': len(analysis.get('examples', [])),
             'narrative': analysis.get('narrative', ''),
             'examples': analysis.get('examples', [])
         }
