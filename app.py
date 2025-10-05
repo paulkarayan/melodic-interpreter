@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-from core import harmony, melodic, session_scraper, melodic_transformations, harmony_transformations, ornamentation_transformations
+from core import harmony, melodic, session_scraper, melodic_transformations, harmony_transformations, ornamentation_transformations, reharmonization
 from core.melodic import _diff_abc_bars
 
 app = FastAPI(title="Irish Tune Variation Generator")
@@ -1021,6 +1021,29 @@ async def add_ornamentation(req: OrnamentationRequest):
         'description': f'{req.ornamentation_type}: Ornamentation will be added here',
         'changed_bars': []
     }
+
+
+@app.post("/reharmonize")
+async def reharmonize_tune(req: MelodyTransformRequest):
+    """Programmatic reharmonization using music theory"""
+    try:
+        result = reharmonization.reharmonize_abc(req.abc, num_alternatives=5)
+
+        return {
+            'original': req.abc,
+            'transformed_abc': result['annotated_abc'],
+            'transformation': 'reharmonize',
+            'description': 'Programmatic chord analysis and substitution suggestions',
+            'explanation': f'Analyzed melody in {result["key"]} and suggested {len(result["bar_analyses"])} chord options per bar',
+            'bar_analyses': result['bar_analyses'],
+        }
+
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] {traceback.format_exc()}")
+        return {
+            'error': str(e)
+        }
 
 
 @app.get("/health")

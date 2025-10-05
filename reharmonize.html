@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reharmonization Analysis - Irish Tune Generator</title>
+    <link rel="stylesheet" href="shared/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/abcjs@6.4.3/dist/abcjs-basic-min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="section">
+            <h1>🎹 Reharmonization Analysis</h1>
+            <p>Programmatic chord analysis using music theory - discover alternative chord choices for any melody</p>
+            <button class="back-button" onclick="window.location.href='index.html'">← Back to Index</button>
+        </div>
+
+        <div class="section">
+            <div class="input-group">
+                <label for="abc-input">ABC Notation:</label>
+                <textarea id="abc-input" placeholder="Paste ABC notation here...">X:1
+T:Sliabh Russell
+R:jig
+M:6/8
+L:1/8
+K:Ador
+|:eAA Bcd|eaf ged|edB cBA|BAG ABd|
+eAA Bcd|eaf ged|edB cBA|1 BAG A3:|2 BAG ABd||
+|:eaa efg|agf gfd|eaa efg|afd e3|
+eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
+            </div>
+
+            <button onclick="analyzeReharmonization()">Analyze Chords</button>
+        </div>
+
+        <div class="playback-controls">
+            <div class="tempo-control">
+                <label for="tempo-slider">Tempo (BPM):</label>
+                <input type="range" id="tempo-slider" min="60" max="240" value="120" step="5">
+                <input type="number" id="tempo-value" min="60" max="240" value="120" step="5">
+            </div>
+            <button class="stop-button" onclick="stopPlayback()">⏹ Stop All</button>
+        </div>
+
+        <div id="error-output" class="section error" style="display:none;">
+            <strong>Error:</strong> <span id="error-message"></span>
+        </div>
+
+        <div id="output-section" style="display:none;">
+            <div class="section">
+                <h2>Original Melody</h2>
+                <div id="original-notation" class="notation"></div>
+                <div style="margin-top: 10px;">
+                    <button class="play-button" onclick="playOriginal()">▶ Play Original</button>
+                    <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Annotated with Primary Chords</h2>
+                <p id="analysis-summary"></p>
+                <div id="annotated-notation" class="notation"></div>
+                <div style="margin-top: 10px;">
+                    <button class="play-button" onclick="playAnnotated()">▶ Play with Chords</button>
+                    <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                </div>
+            </div>
+
+            <div class="section variation">
+                <h2>Alternative Chord Choices</h2>
+                <p>For each bar, here are alternative chords that work with the melody notes:</p>
+                <div id="alternatives-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { playVariation, stopAllPlayback, renderAbc } from './shared/playback.js';
+
+        // State
+        let variationAbcs = {};
+
+        // Sync tempo controls
+        const tempoSlider = document.getElementById('tempo-slider');
+        const tempoValue = document.getElementById('tempo-value');
+
+        tempoSlider.addEventListener('input', () => {
+            tempoValue.value = tempoSlider.value;
+        });
+
+        tempoValue.addEventListener('input', () => {
+            tempoSlider.value = tempoValue.value;
+        });
+
+        // Analyze reharmonization
+        window.analyzeReharmonization = async function() {
+            console.log('[REHARMONIZE] Analyzing...');
+
+            const abc = document.getElementById('abc-input').value;
+
+            if (!abc) {
+                showError('Please provide ABC notation');
+                return;
+            }
+
+            hideError();
+            document.getElementById('output-section').style.display = 'none';
+
+            try {
+                const response = await fetch('/reharmonize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        abc: abc,
+                        transformation: 'reharmonize'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('[REHARMONIZE] Response:', data);
+
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                // Store ABCs
+                variationAbcs = {
+                    original: data.original,
+                    annotated: data.transformed_abc
+                };
+
+                // Render original
+                renderAbc('original-notation', data.original);
+
+                // Render annotated
+                renderAbc('annotated-notation', data.transformed_abc);
+
+                // Display summary
+                document.getElementById('analysis-summary').textContent = data.explanation;
+
+                // Display alternatives
+                displayAlternatives(data.bar_analyses);
+
+                document.getElementById('output-section').style.display = 'block';
+
+            } catch (error) {
+                console.error('[REHARMONIZE ERROR]', error);
+                showError(error.message);
+            }
+        };
+
+        function displayAlternatives(barAnalyses) {
+            let html = '';
+
+            barAnalyses.forEach(analysis => {
+                if (!analysis.alternatives || analysis.alternatives.length === 0) {
+                    return;
+                }
+
+                const primaryChord = analysis.primary_chord;
+
+                html += `
+                    <div class="section" style="margin-top: 20px; background-color: #f9f9f9; padding: 15px; border-left: 4px solid #4CAF50;">
+                        <h4>Bar ${analysis.bar_number}: <code>${analysis.bar_content}</code></h4>
+                        <p><strong>Primary chord:</strong> <span style="font-size: 1.2em; color: #4CAF50;">${primaryChord.name}</span> - ${primaryChord.explanation}</p>
+                        <p><strong>Alternative choices:</strong></p>
+                        <ul style="margin-left: 20px;">
+                `;
+
+                analysis.alternatives.forEach(alt => {
+                    html += `
+                        <li>
+                            <strong>${alt.name}</strong> - ${alt.explanation}
+                            ${alt.in_key ? ' <span style="color: #4CAF50;">✓ In key</span>' : ''}
+                        </li>
+                    `;
+                });
+
+                html += `
+                        </ul>
+                    </div>
+                `;
+            });
+
+            document.getElementById('alternatives-container').innerHTML = html;
+        }
+
+        // Playback functions
+        window.playOriginal = function() {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation('original', variationAbcs, tempo);
+        };
+
+        window.playAnnotated = function() {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation('annotated', variationAbcs, tempo);
+        };
+
+        window.stopPlayback = function() {
+            stopAllPlayback();
+        };
+
+        // Error handling
+        function showError(message) {
+            document.getElementById('error-message').textContent = message;
+            document.getElementById('error-output').style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error-output').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

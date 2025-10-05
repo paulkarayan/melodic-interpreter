@@ -46,6 +46,7 @@
     "rollup": "^4.52.4",
     "source-map-js": "^1.2.1",
     "tinyglobby": "^0.2.15",
+    "tonal": "^6.4.2",
     "vitefu": "^1.1.1",
     "zimmerframe": "^1.1.4"
   }
