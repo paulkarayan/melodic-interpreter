@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anglo Concertina Harmoniser - Irish Tune Generator</title>
+    <link rel="stylesheet" href="shared/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/abcjs@6.4.3/dist/abcjs-basic-min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="section">
+            <h1>🎹 Anglo Concertina Harmoniser</h1>
+            <p>Add harmony layers to tunes following traditional Irish music principles</p>
+            <button class="back-button" onclick="window.location.href='index.html'">← Back to Index</button>
+        </div>
+
+        <div class="section">
+            <div class="input-group">
+                <label for="abc-input">ABC Notation:</label>
+                <textarea id="abc-input" placeholder="Paste ABC notation here...">X:1
+T:Sliabh Russell
+R:jig
+M:6/8
+L:1/8
+K:Ador
+|:eAA Bcd|eaf ged|edB cBA|BAG ABd|
+eAA Bcd|eaf ged|edB cBA|1 BAG A3:|2 BAG ABd||
+|:eaa efg|agf gfd|eaa efg|afd e3|
+eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
+            </div>
+
+            <div class="input-group">
+                <label>Harmonic Rhythm (how often chords change):</label>
+                <div style="margin-left: 20px;">
+                    <label><input type="radio" name="harmonic-rhythm" value="drone" checked> Drone (tonic only, traditional)</label><br>
+                    <label><input type="radio" name="harmonic-rhythm" value="sparse"> Sparse (change every 4 bars)</label><br>
+                    <label><input type="radio" name="harmonic-rhythm" value="moderate"> Moderate (change every 2 bars)</label><br>
+                    <label><input type="radio" name="harmonic-rhythm" value="active"> Active (change every bar at phrase points)</label>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>Harmony Layers:</label>
+                <div style="margin-left: 20px;">
+                    <label><input type="checkbox" id="layer-power-chords"> Power Chords (root + 5th, modal-safe)</label><br>
+                    <label><input type="checkbox" id="layer-thirds"> Thirds Harmony (parallel motion)</label><br>
+                    <label><input type="checkbox" id="layer-bass"> Bass Notes (on chord changes only)</label><br>
+                    <label><input type="checkbox" id="layer-chords"> Strategic Chords (full triads at phrase points)</label>
+                </div>
+                <small style="color: #666; display: block; margin-top: 5px;">Select one or more layers to combine</small>
+            </div>
+
+            <button onclick="generateHarmony()">Generate Harmony</button>
+        </div>
+
+        <div class="playback-controls">
+            <div class="tempo-control">
+                <label for="tempo-slider">Tempo (BPM):</label>
+                <input type="range" id="tempo-slider" min="60" max="240" value="120" step="5">
+                <input type="number" id="tempo-value" min="60" max="240" value="120" step="5">
+            </div>
+            <button class="stop-button" onclick="stopPlayback()">⏹ Stop All</button>
+        </div>
+
+        <div id="error-output" class="section error" style="display:none;">
+            <strong>Error:</strong> <span id="error-message"></span>
+        </div>
+
+        <div id="output-section" style="display:none;">
+            <div class="section">
+                <h2>Melody Only</h2>
+                <div id="melody-notation" class="notation"></div>
+                <div style="margin-top: 10px;">
+                    <button class="play-button" onclick="playMelody()">▶ Play Melody Only</button>
+                    <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                </div>
+            </div>
+
+            <div class="section variation">
+                <h2>Harmony Only</h2>
+                <div id="harmony-desc" class="description"></div>
+                <div id="harmony-notation" class="notation"></div>
+                <div style="margin-top: 10px;">
+                    <button class="play-button" onclick="playHarmony()">▶ Play Harmony Only</button>
+                    <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>Combined (Melody + Harmony)</h2>
+                <div id="combined-notation" class="notation"></div>
+                <div style="margin-top: 10px;">
+                    <button class="play-button" onclick="playCombined()">▶ Play Combined</button>
+                    <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                </div>
+            </div>
+
+            <div class="section" style="background-color: #f9f9f9; border-left: 4px solid #4CAF50;">
+                <h3>Harmony Analysis</h3>
+                <div id="analysis-content" style="white-space: pre-wrap; line-height: 1.6;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { playVariation, stopAllPlayback, renderAbc } from './shared/playback.js';
+
+        // State
+        let currentAbcs = {};
+
+        // Sync tempo controls
+        const tempoSlider = document.getElementById('tempo-slider');
+        const tempoValue = document.getElementById('tempo-value');
+
+        tempoSlider.addEventListener('input', () => {
+            tempoValue.value = tempoSlider.value;
+        });
+
+        tempoValue.addEventListener('input', () => {
+            tempoSlider.value = tempoValue.value;
+        });
+
+        // Generate harmony
+        window.generateHarmony = async function() {
+            console.log('[HARMONISER] Generating harmony...');
+
+            const abc = document.getElementById('abc-input').value;
+            const harmonicRhythm = document.querySelector('input[name="harmonic-rhythm"]:checked').value;
+
+            // Get selected layers
+            const layers = [];
+            if (document.getElementById('layer-power-chords').checked) layers.push('power_chords');
+            if (document.getElementById('layer-thirds').checked) layers.push('thirds');
+            if (document.getElementById('layer-bass').checked) layers.push('bass');
+            if (document.getElementById('layer-chords').checked) layers.push('chords');
+
+            if (!abc) {
+                showError('Please provide ABC notation');
+                return;
+            }
+
+            if (layers.length === 0) {
+                showError('Please select at least one harmony layer');
+                return;
+            }
+
+            hideError();
+            document.getElementById('output-section').style.display = 'none';
+
+            // Show spinner
+            document.getElementById('harmony-desc').textContent = '⏳ Analyzing melody and generating harmony...';
+            document.getElementById('output-section').style.display = 'block';
+
+            try {
+                const response = await fetch('/harmonise', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        abc: abc,
+                        harmonic_rhythm: harmonicRhythm,
+                        layers: layers
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('[HARMONISER] Response:', data);
+
+                if (data.error) {
+                    showError(data.error);
+                    document.getElementById('output-section').style.display = 'none';
+                    return;
+                }
+
+                // Store ABCs
+                currentAbcs = {
+                    melody: data.melody_only,
+                    harmony: data.harmony_only,
+                    combined: data.combined
+                };
+
+                // Display description
+                document.getElementById('harmony-desc').textContent = data.description;
+
+                // Render all three versions
+                renderAbc('melody-notation', data.melody_only);
+                renderAbc('harmony-notation', data.harmony_only);
+                renderAbc('combined-notation', data.combined);
+
+                // Display analysis
+                document.getElementById('analysis-content').textContent = data.analysis || '';
+
+                document.getElementById('output-section').style.display = 'block';
+
+            } catch (error) {
+                console.error('[HARMONISER ERROR]', error);
+                showError(error.message);
+                document.getElementById('output-section').style.display = 'none';
+            }
+        };
+
+        // Playback functions
+        window.playMelody = function() {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation('melody', currentAbcs, tempo);
+        };
+
+        window.playHarmony = function() {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation('harmony', currentAbcs, tempo);
+        };
+
+        window.playCombined = function() {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation('combined', currentAbcs, tempo);
+        };
+
+        window.stopPlayback = function() {
+            stopAllPlayback();
+        };
+
+        // Error handling
+        function showError(message) {
+            document.getElementById('error-message').textContent = message;
+            document.getElementById('error-output').style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error-output').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

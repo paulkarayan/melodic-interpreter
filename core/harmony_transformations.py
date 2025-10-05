@@ -21,11 +21,129 @@ Usage:
 """
 
 HARMONY_TRANSFORMATIONS = {
-    
+
+    # ========================================
+    # CLASSIC CHORD TRICKS
+    # ========================================
+
+    "three_chord_trick": """
+Transform this ABC notation by adding the classic "3 Chord Trick" accompaniment:
+
+STEP 1 - DETECT MODE from key signature:
+- If key ends with 'dor' (Ador, Ddor, Edor): DORIAN mode
+- If key ends with 'mix' (Dmix, Gmix, Amix): MIXOLYDIAN mode
+- If key is minor (Am, Em, Dm) or ends with 'm': AEOLIAN mode
+- Otherwise: IONIAN (major) mode
+
+STEP 2 - SELECT 3 CHORDS based on mode:
+
+IONIAN (Major):
+  * I (major): tonic (e.g., C = CEG in key of C)
+  * V (major): dominant (e.g., G = GBD in key of C)
+  * IV (major): subdominant (e.g., F = FAC in key of C)
+
+DORIAN (e.g., D Dorian):
+  * i (minor): tonic (e.g., Dm = DFA)
+  * IV (MAJOR): characteristic Dorian sound (e.g., G = GBD)
+  * ♭VII (major): (e.g., C = CEG)
+
+MIXOLYDIAN (e.g., D Mixolydian):
+  * I (major): tonic (e.g., D = DF♯A)
+  * ♭VII (major): characteristic flattened 7th (e.g., C = CEG) - NEVER use V
+  * IV (major): (e.g., G = GBD)
+
+AEOLIAN (Natural Minor, e.g., A Aeolian):
+  * i (minor): tonic (e.g., Am = ACE)
+  * ♭VII (major): (e.g., G = GBD)
+  * ♭VI (major): (e.g., F = FAC)
+
+STEP 3 - ADD CHORDS WITH PROPER TIMING:
+- Use TWO VOICES in ABC notation:
+  * V:1 = Melody with chord annotations at EVERY chord change
+  * V:2 = Harmony (treble clef octave=-1) - chord voicings
+- CRITICAL: Play chord triad WHEN the chord changes (not just once per bar)
+- If chord changes mid-bar, play the new chord at that beat
+- Examples:
+  6/8 time with chord change mid-bar: |:"Am"[ace]2 "G"[gbd]2 z2|
+  4/4 time with 2 changes per bar: |:"D"[df♯a]2 "C"[ceg]2 "G"[gbd]2 z2|
+  Stable bar (no change): |:"Am"[ace]2 z2 z2 z2|
+- Analyze melody notes on strong beats to determine when chords should change
+- Don't force changes - if harmony is stable for 2+ bars, sustain the same chord
+
+STEP 4 - OUTPUT FORMAT:
+V:1 clef=treble name="Melody"
+|:"Am"eAA "G"Bcd|"Am"eaf ged|
+V:2 clef=treble name="Harmony" octave=-1
+|:"Am"[ace]2 "G"[gbd]2 z2|"Am"[ace]2 z2 z2|
+
+Output ONLY the complete transformed ABC notation.
+""",
+
+    "five_chord_trick": """
+Transform this ABC notation by adding the "5 Chord Trick" accompaniment:
+
+STEP 1 - DETECT MODE from key signature:
+- If key ends with 'dor' (Ador, Ddor, Edor): DORIAN mode
+- If key ends with 'mix' (Dmix, Gmix, Amix): MIXOLYDIAN mode
+- If key is minor (Am, Em, Dm) or ends with 'm': AEOLIAN mode
+- Otherwise: IONIAN (major) mode
+
+STEP 2 - SELECT 5 CHORDS based on mode:
+
+IONIAN (Major, e.g., C major):
+  * I (C major - CEG): tonic
+  * ii (D minor - DFA): pre-dominant
+  * iii (E minor - EGB): adds color
+  * IV (F major - FAC): subdominant
+  * V (G major - GBD): dominant
+
+DORIAN (e.g., D Dorian):
+  * i (D minor - DFA): tonic
+  * ii (E minor - EGB): supertonic
+  * ♭III (F major - FAC): mediant
+  * IV (G MAJOR - GBD): characteristic Dorian
+  * v (A minor - ACE): minor dominant
+
+MIXOLYDIAN (e.g., D Mixolydian):
+  * I (D major - DF♯A): tonic
+  * ii (E minor - EGB): supertonic
+  * iii° (F♯ diminished - F♯AC): rarely used
+  * IV (G major - GBD): subdominant
+  * ♭VII (C major - CEG): characteristic flattened 7th - NEVER use V
+
+AEOLIAN (Natural Minor, e.g., A Aeolian):
+  * i (A minor - ACE): tonic
+  * ii° (B diminished - BDF): rarely used
+  * ♭III (C major - CEG): mediant
+  * iv (D minor - DFA): subdominant
+  * ♭VII (G major - GBD): subtonic
+
+STEP 3 - ADD CHORDS WITH PROPER TIMING:
+- Use TWO VOICES in ABC notation:
+  * V:1 = Melody with chord annotations at EVERY chord change
+  * V:2 = Harmony (treble clef octave=-1) - chord voicings
+- CRITICAL: Play chord triad WHEN the chord changes (not just once per bar)
+- If chord changes mid-bar, play the new chord at that beat
+- Examples:
+  6/8 time with chord change mid-bar: |:"Am"[ace]2 "Dm"[dfa]2 z2|
+  4/4 time with 2 changes per bar: |:"D"[df♯a]2 "Em"[egb]2 "G"[gbd]2 z2|
+  Stable bar (no change): |:"Am"[ace]2 z2 z2 z2|
+- The 5 chord trick gives more options than 3 chord trick for matching melody notes
+- Analyze melody notes to pick the best-fitting chord from the 5 available
+
+STEP 4 - OUTPUT FORMAT:
+V:1 clef=treble name="Melody"
+|:"Am"eAA "Dm"Bcd|"C"eaf "G"ged|
+V:2 clef=treble name="Harmony" octave=-1
+|:"Am"[ace]2 "Dm"[dfa]2 z2|"C"[ceg]2 "G"[gbd]2 z2|
+
+Output ONLY the complete transformed ABC notation.
+""",
+
     # ========================================
     # FUNDAMENTAL INTERVAL VOICINGS
     # ========================================
-    
+
     "fifth_drone_bass": """
 Transform this ABC notation by adding fifth-based drone accompaniment in ABC format:
 - Add bass harmony notes using ABC chord notation with square brackets [AD] for chords
@@ -105,19 +223,30 @@ Output ONLY the complete transformed ABC notation with chord progression added.
 """,
 
     "simple_chord_changes": """
-Transform this ABC notation by analyzing the melody and adding anglo concertina chord voicings:
+Transform this ABC notation by adding sustained chord accompaniment using two-voice ABC:
 - Analyze the melody to identify what chords fit each section (I, IV, V, vi, etc.)
-- When the chord changes (and on the first note of the piece), replace the melody note with 2-3 chord notes using square brackets
-- Write the chord name above each chord change using ABC notation: "Am" for chord annotations
-- Use anglo concertina-appropriate voicings: limit to 2-3 notes maximum
-- Example in A Dorian: if bar starts with "eAA Bcd" and chord is Am, replace with "\"Am\"[ACE]AA Bcd|"
-- Example chord change: "|eAA Bcd|" becomes "|\"Am\"[ACE]AA Bcd|" then next bar "|\"Dm\"[DFA] eaf ged|" if chord changes to Dm
+- Create TWO VOICES using ABC notation:
+  * V:1 = Melody (treble clef) - keep the original melody unchanged, just add chord name annotations above like "Am"
+  * V:2 = Harmony (ALSO TREBLE CLEF with octave=-1 to play lower) - sustained chord voicings (2-3 notes) that last the whole bar
+- CRITICAL: V:2 MUST use "clef=treble name=\"Harmony\" octave=-1" NOT "clef=bass"
+- Format EXACTLY like this example:
+
+  V:1 clef=treble name="Melody"
+  |:"Am"eAA Bcd|"G"eaf ged|
+  V:2 clef=treble name="Harmony" octave=-1
+  |:"Am"[ace]2 z2 z2|"G"[gbd]2 z2 z2|
+
 - Common chords for A Dorian: Am, Dm, G, C
 - Common chords for D Major: D, G, A, Bm
 - Common chords for D Mixolydian: D, C, G, Am
 - Common chords for G Major: G, C, D, Em
-- Keep rhythm natural - chord voicing should fit the same duration as the note it replaces
-Output ONLY the complete transformed ABC notation with chord changes added.
+- IMPORTANT: Play chord ONCE then REST - in 6/8 use [ace]2 z2 z2 (quarter note chord + 2 quarter rests)
+- In 4/4 time, use [ace]2 z2 z2 z2 (quarter note chord + 3 quarter rests)
+- This avoids galloping/retriggering - clean single attack per bar
+- Keep chord voicings simple: 2-3 notes maximum for anglo concertina
+- IMPORTANT: Output the COMPLETE ABC notation including all headers (X:, T:, R:, M:, L:, K:) followed by the two voices
+- DO NOT use clef=bass - use clef=treble octave=-1 for the harmony voice
+Output ONLY the complete transformed ABC notation with two voices.
 """,
 
     "trick_chord_changes": """

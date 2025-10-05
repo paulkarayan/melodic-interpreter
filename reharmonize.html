@@ -39,6 +39,10 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                 <input type="range" id="tempo-slider" min="60" max="240" value="120" step="5">
                 <input type="number" id="tempo-value" min="60" max="240" value="120" step="5">
             </div>
+            <div style="margin-left: 20px;">
+                <label><input type="checkbox" id="play-melody" checked> Melody</label>
+                <label style="margin-left: 15px;"><input type="checkbox" id="play-harmony" checked> Harmony</label>
+            </div>
             <button class="stop-button" onclick="stopPlayback()">⏹ Stop All</button>
         </div>
 
@@ -154,40 +158,159 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
             }
         };
 
+        // Store current chord choices (bar_number -> chord object)
+        let currentChordChoices = {};
+        let allBarAnalyses = [];
+
         function displayAlternatives(barAnalyses) {
+            allBarAnalyses = barAnalyses;
+
+            // Initialize current choices with primary chords
+            barAnalyses.forEach(analysis => {
+                if (analysis.primary_chord) {
+                    currentChordChoices[analysis.bar_number] = analysis.primary_chord;
+                }
+            });
+
             let html = '';
 
             barAnalyses.forEach(analysis => {
-                if (!analysis.alternatives || analysis.alternatives.length === 0) {
+                if (!analysis.primary_chord) {
                     return;
                 }
 
                 const primaryChord = analysis.primary_chord;
+                const allChoices = [primaryChord, ...analysis.alternatives];
 
                 html += `
                     <div class="section" style="margin-top: 20px; background-color: #f9f9f9; padding: 15px; border-left: 4px solid #4CAF50;">
                         <h4>Bar ${analysis.bar_number}: <code>${analysis.bar_content}</code></h4>
-                        <p><strong>Primary chord:</strong> <span style="font-size: 1.2em; color: #4CAF50;">${primaryChord.name}</span> - ${primaryChord.explanation}</p>
-                        <p><strong>Alternative choices:</strong></p>
-                        <ul style="margin-left: 20px;">
+                        <p><strong>Choose a chord:</strong></p>
+                        <div style="margin-left: 20px;">
                 `;
 
-                analysis.alternatives.forEach(alt => {
+                allChoices.forEach((chord, idx) => {
+                    const isPrimary = idx === 0;
+                    const radioId = `bar${analysis.bar_number}_chord${idx}`;
                     html += `
-                        <li>
-                            <strong>${alt.name}</strong> - ${alt.explanation}
-                            ${alt.in_key ? ' <span style="color: #4CAF50;">✓ In key</span>' : ''}
-                        </li>
+                        <div style="margin-bottom: 8px;">
+                            <input type="radio"
+                                   id="${radioId}"
+                                   name="bar${analysis.bar_number}"
+                                   value="${idx}"
+                                   ${isPrimary ? 'checked' : ''}
+                                   onchange="updateChordChoice(${analysis.bar_number}, ${idx})">
+                            <label for="${radioId}" style="cursor: pointer;">
+                                <strong>${chord.name}</strong> - ${chord.explanation}
+                                ${chord.in_key ? ' <span style="color: #4CAF50;">✓ In key</span>' : ''}
+                                ${isPrimary ? ' <span style="color: #2196F3;">(Primary)</span>' : ''}
+                            </label>
+                        </div>
                     `;
                 });
 
                 html += `
-                        </ul>
+                        </div>
                     </div>
                 `;
             });
 
             document.getElementById('alternatives-container').innerHTML = html;
+        }
+
+        window.updateChordChoice = function(barNumber, choiceIndex) {
+            console.log(`[CHORD CHOICE] Bar ${barNumber} -> Choice ${choiceIndex}`);
+
+            // Find the analysis for this bar
+            const analysis = allBarAnalyses.find(a => a.bar_number === barNumber);
+            if (!analysis) return;
+
+            // Get the selected chord
+            const allChoices = [analysis.primary_chord, ...analysis.alternatives];
+            const selectedChord = allChoices[choiceIndex];
+
+            // Update current choices
+            currentChordChoices[barNumber] = selectedChord;
+
+            // Rebuild the harmonized ABC with new choices
+            rebuildHarmonizedABC();
+        };
+
+        function rebuildHarmonizedABC() {
+            // Get the original ABC
+            const original = variationAbcs.original;
+
+            // Extract key
+            const keyMatch = original.match(/K:\s*([^\n]+)/);
+            const key = keyMatch ? keyMatch[1].trim() : 'C';
+
+            // Split into header and body
+            const lines = original.split('\n');
+            const headerEnd = lines.findIndex(l => l.startsWith('K:'));
+            const headers = lines.slice(0, headerEnd + 1).join('\n');
+            const bodyLines = lines.slice(headerEnd + 1);
+
+            // Build two voices: melody and chords
+            const melodyLines = [];
+            const chordLines = [];
+
+            bodyLines.forEach(line => {
+                if (!line.trim() || line.trim().startsWith('%')) {
+                    melodyLines.push(line);
+                    chordLines.push(line);
+                    return;
+                }
+
+                let melodyLine = line;
+                let chordLine = line;
+
+                allBarAnalyses.forEach(analysis => {
+                    const selectedChord = currentChordChoices[analysis.bar_number];
+                    if (!selectedChord) return;
+
+                    if (line.includes(analysis.bar_content)) {
+                        const chordName = selectedChord.name;
+                        const voicing = buildChordVoicing(selectedChord);
+
+                        // Melody voice: add chord annotation, keep melody
+                        const melodyReplacement = `"${chordName}"${analysis.bar_content}`;
+                        melodyLine = melodyLine.replace(analysis.bar_content, melodyReplacement);
+
+                        // Chord voice: single chord attack then rest
+                        // In 6/8: quarter note chord + rests = [ace]2 z2 z2
+                        const chordReplacement = `"${chordName}"${voicing}2 z2 z2`;
+                        chordLine = chordLine.replace(analysis.bar_content, chordReplacement);
+                    }
+                });
+
+                melodyLines.push(melodyLine);
+                chordLines.push(chordLine);
+            });
+
+            // Combine into two-voice ABC
+            const harmonizedABC = headers + '\n' +
+                'V:1 clef=treble name="Melody"\n' +
+                melodyLines.join('\n') + '\n' +
+                'V:2 clef=treble name="Harmony" octave=-1\n' +
+                chordLines.join('\n');
+
+            // Update the stored ABC
+            variationAbcs.annotated = harmonizedABC;
+
+            // Re-render the annotated notation
+            renderAbc('annotated-notation', harmonizedABC);
+        }
+
+        function buildChordVoicing(chord) {
+            // Map pitch classes to ABC note names with accidentals
+            // Use lowercase for treble register (will be played lower with octave=-1)
+            const pitchToAbc = {
+                0: 'c', 1: '^c', 2: 'd', 3: '_e', 4: 'e', 5: 'f',
+                6: '^f', 7: 'g', 8: '_a', 9: 'a', 10: '_b', 11: 'b'
+            };
+            const tones = chord.tones.slice(0, 3); // First 3 notes
+            const notes = tones.map(t => pitchToAbc[t]);
+            return '[' + notes.join('') + ']';
         }
 
         // Playback functions
@@ -198,7 +321,16 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
 
         window.playAnnotated = function() {
             const tempo = parseInt(document.getElementById('tempo-value').value);
-            playVariation('annotated', variationAbcs, tempo);
+
+            // Check which voices to mute
+            const muteVoices = [];
+            const playMelody = document.getElementById('play-melody').checked;
+            const playHarmony = document.getElementById('play-harmony').checked;
+
+            if (!playMelody) muteVoices.push(0); // V:1 = voice 0
+            if (!playHarmony) muteVoices.push(1); // V:2 = voice 1
+
+            playVariation('annotated', variationAbcs, tempo, { muteVoices });
         };
 
         window.stopPlayback = function() {

@@ -11,8 +11,9 @@ let synthControllers = {};
  * @param {string} variationType - Key for variation (e.g., 'original', 'melodic')
  * @param {object} variationAbcs - Object mapping variation types to ABC strings
  * @param {number} tempo - Tempo in BPM
+ * @param {object} options - Optional {muteVoices: [1, 2]} to mute specific voices
  */
-export function playVariation(variationType, variationAbcs, tempo) {
+export function playVariation(variationType, variationAbcs, tempo, options = {}) {
     console.log(`[PLAYBACK] Playing variation type: ${variationType}`);
     console.log(`[PLAYBACK] Available variations:`, Object.keys(variationAbcs));
 
@@ -54,13 +55,20 @@ export function playVariation(variationType, variationAbcs, tempo) {
         synthControllers[variationType] = newSynth;
         console.log(`[PLAYBACK] New synth created for ${variationType}`);
 
-        newSynth.init({
+        const initOptions = {
             visualObj: visualObj,
             options: {
                 program: 73, // Flute sound
                 qpm: tempo
             }
-        }).then(() => {
+        };
+
+        // Mute specific voices if requested
+        if (options.muteVoices && options.muteVoices.length > 0) {
+            initOptions.options.voicesOff = options.muteVoices;
+        }
+
+        newSynth.init(initOptions).then(() => {
             console.log(`[PLAYBACK] Synth initialized, priming...`);
             return newSynth.prime();
         }).then(() => {

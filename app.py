@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-from core import harmony, melodic, session_scraper, melodic_transformations, harmony_transformations, ornamentation_transformations, reharmonization
+from core import harmony, melodic, session_scraper, melodic_transformations, harmony_transformations, ornamentation_transformations, reharmonization, harmoniser
 from core.melodic import _diff_abc_bars
 
 app = FastAPI(title="Irish Tune Variation Generator")
@@ -96,6 +96,12 @@ async def ornamentation_prompt():
 async def reharmonize_page():
     """Serve reharmonization analysis page"""
     return FileResponse('reharmonize.html')
+
+
+@app.get("/harmoniser.html", response_class=HTMLResponse)
+async def harmoniser_page():
+    """Serve Anglo concertina harmoniser page"""
+    return FileResponse('harmoniser.html')
 
 
 @app.post("/generate")
@@ -1042,6 +1048,38 @@ async def reharmonize_tune(req: MelodyTransformRequest):
             'explanation': f'Analyzed melody in {result["key"]} and suggested {len(result["bar_analyses"])} chord options per bar',
             'bar_analyses': result['bar_analyses'],
         }
+
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] {traceback.format_exc()}")
+        return {
+            'error': str(e)
+        }
+
+
+class HarmoniserRequest(BaseModel):
+    abc: str
+    harmonic_rhythm: str
+    layers: List[str]
+
+
+@app.post("/harmonise")
+async def harmonise_tune(req: HarmoniserRequest):
+    """Generate Anglo concertina harmony using hybrid approach"""
+
+    if not ANTHROPIC_AVAILABLE:
+        return {
+            'error': 'Anthropic API not available. Set ANTHROPIC_API_KEY environment variable.'
+        }
+
+    try:
+        result = harmoniser.harmonise_abc(
+            req.abc,
+            harmonic_rhythm=req.harmonic_rhythm,
+            layers=req.layers
+        )
+
+        return result
 
     except Exception as e:
         import traceback
