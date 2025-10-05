@@ -120,6 +120,26 @@ Transform this ABC notation by analyzing the melody and adding anglo concertina 
 Output ONLY the complete transformed ABC notation with chord changes added.
 """,
 
+    "trick_chord_changes": """
+Transform this ABC notation by using UNEXPECTED/ALTERNATIVE chord choices that still work with the melody:
+- Analyze each phrase and identify MULTIPLE possible chord choices that work over the same melody notes
+- Use more colorful, jazz-influenced, or modal substitutions instead of obvious I-IV-V choices
+- Examples of trick chords:
+  * Instead of Am over A-C-E melody: try Fmaj7, C6, or Em7
+  * Instead of G major: try Em, Cmaj7, or Bm7
+  * Instead of D major: try Bm, Gmaj7, or F#m7
+  * Use slash chords like G/A or C/D for ambiguous modal sound
+  * Use diminished chords as passing harmonies
+  * Use secondary dominants (V/V, V/IV)
+- Replace melody notes with 2-3 note chord voicings at changes
+- Add chord name annotations above each change using ABC notation
+- Limit voicings to 2-3 notes for anglo concertina playability
+- Create harmonic interest and reharmonization, not just predictable chord progressions
+- Example: "|eAA Bcd|" might become "|\"Fmaj7\"[FAC]AA Bcd|" instead of obvious Am
+- Make unexpected but musically valid choices that add color and sophistication
+Output ONLY the complete transformed ABC notation with trick chord reharmonization.
+""",
+
     "bass_line": """
 Transform this ABC notation by adding a simple walking bass line in ABC format:
 - Add bass notes that move stepwise or by small intervals
