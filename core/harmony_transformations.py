@@ -27,36 +27,36 @@ HARMONY_TRANSFORMATIONS = {
     # ========================================
     
     "fifth_drone_bass": """
-Transform this ABC notation by adding fifth-based drone accompaniment:
-- Add root-fifth intervals (perfect 5th) in the bass/left hand
-- Place on strong beats (beats 1 and 3 in 4/4, beat 1 in 6/8)
-- Use open voicing (no third) to maintain modal ambiguity
-- Don't commit to major or minor - let the melody determine tonality
-- Keep harmony sparse - not on every beat
-- Match bellows direction of melody if bisonoric
-Output the transformed ABC notation with harmonic accompaniment.
+Transform this ABC notation by adding fifth-based drone accompaniment in ABC format:
+- Add bass harmony notes using ABC chord notation with square brackets [AD] for chords
+- Use root and fifth intervals (e.g., if melody is in A, add [AD] or [AE])
+- Place harmony on strong beats only (beat 1 in 6/8, beats 1 and 3 in 4/4)
+- Example: if melody bar is "eAA Bcd" in A minor, add bass like "[AE]eAA Bcd" or "e[AE]A Bcd"
+- Keep it simple - use longer note values for the bass (half notes or dotted quarters in bass clef)
+- The ABC notation should use [XY] for simultaneous notes/chords
+Output ONLY the complete transformed ABC notation with the bass harmony added.
 """,
 
     "root_fifth_power_chords": """
-Transform this ABC notation by adding power chord accompaniment:
-- Add root-fifth "power chords" (two or three notes: root, fifth, optional octave)
-- Place strategically at phrase beginnings, endings, and strong beats
-- Keep minimal to avoid overpowering melody
-- Omit the third entirely for modal flexibility
-- Use same bellows direction as melody notes
-- Tie up only 2-3 fingers, leaving others free for melody
-Output the transformed ABC notation with power chord accompaniment.
+Transform this ABC notation by adding power chord accompaniment in ABC format:
+- Add root-fifth chords using square brackets like [AD] or [AE]
+- Place at phrase beginnings and endings, and on strong beats
+- Example: "eAA Bcd|eaf ged|" becomes "[AE]eAA Bcd|[AE]eaf ged|"
+- Use the root and fifth of the key (for A minor: [AE], for D major: [DA])
+- Keep sparse - don't add to every bar
+- The ABC notation uses [XY] for simultaneous notes
+Output ONLY the complete transformed ABC notation with power chords added.
 """,
 
     "strategic_bass_notes": """
-Transform this ABC notation by adding strategic bass notes only:
-- Add single bass notes (roots of implied harmony) on strong beats
-- No chords - just emphasize harmonic foundation with bass
-- Use the lowest comfortable register
-- Place on beat 1 primarily, occasionally beat 3 in 4/4
-- Match bellows direction constraints
-- Keep very sparse and supportive, not continuous
-Output the transformed ABC notation with bass note accompaniment.
+Transform this ABC notation by adding strategic bass notes in ABC format:
+- Add single low bass notes on strong beats using uppercase letters (A, D, E, G, etc.)
+- Place before the melody notes on beat 1
+- Example: "eAA Bcd|" becomes "AeAA Bcd|" (A bass note before melody)
+- Use root notes of the key (for A minor: A, E; for D major: D, A)
+- Keep very sparse - only on beat 1 of some bars
+- Do NOT use chords, only single bass notes
+Output ONLY the complete transformed ABC notation with bass notes added.
 """,
 
     "open_fourth_voicing": """
@@ -71,14 +71,36 @@ Output the transformed ABC notation with fourth-based harmonies.
 """,
 
     "octave_doubling": """
-Transform this ABC notation by adding octave doubling:
-- Double melody notes at the octave below (or above)
-- Creates fuller sound without adding harmony
-- Use on phrase beginnings, endings, or entire phrases
-- Particularly effective for slow airs
-- No harmonic commitment - pure unison at different register
-- Match bellows direction
-Output the transformed ABC notation with octave doubling.
+Transform this ABC notation by adding octave doubling in ABC format:
+- Double some melody notes with the same note an octave lower
+- In ABC: lowercase is middle octave, uppercase is octave below, add comma for octave above
+- Example: "eAA Bcd" could become "[Ee][AA][AA] [Bb]cd" (octave doubling on some notes)
+- Use square brackets [Xx] to play two notes simultaneously
+- Don't double every note - be selective (phrase beginnings, long notes)
+- This creates fuller sound without changing harmony
+Output ONLY the complete transformed ABC notation with octave doubling added.
+""",
+
+    "thirds_harmony": """
+Transform this ABC notation by adding harmony in thirds in ABC format:
+- Add harmony notes a third above or below the melody
+- In ABC: use square brackets to play notes together like [ec] for E and C together
+- Example: melody "eAA Bcd" could become "[ec][AC][AC] [Bd]cd" (thirds added)
+- Use major or minor thirds based on the key (A minor: A-C, E-G; D major: D-F#, A-C#)
+- Be selective - don't harmonize every note, just important melody notes
+- Creates richer sound while maintaining melody
+Output ONLY the complete transformed ABC notation with thirds harmony added.
+""",
+
+    "bass_line": """
+Transform this ABC notation by adding a simple walking bass line in ABC format:
+- Add bass notes that move stepwise or by small intervals
+- Use low register notes (uppercase letters: A, B, C, D, E, F, G)
+- Example: "eAA Bcd|eaf ged|" becomes "AeAA BcBcd|CeaDf Eged|" (bass notes A, B, C, E added)
+- Connect the root notes of chords with passing notes
+- Keep it simple and rhythmic - quarter notes or half notes
+- Bass should support the melody, not compete with it
+Output ONLY the complete transformed ABC notation with bass line added.
 """,
 
     "selective_thirds_color": """
@@ -179,36 +201,39 @@ Output the transformed ABC notation with even-beat harmony.
     # ========================================
     
     "tonic_drone_sustain": """
-Transform this ABC notation by adding sustained tonic drone:
-- Sustain the tonic note (root of key) continuously or in long durations
-- Place in bass register under flowing melody
-- Emulates uilleann pipe drone aesthetic
-- Can sustain through bellows reversals using air button management
-- Creates floor against which melody plays
-- Works best in modal tunes (Dorian, Mixolydian)
-Output the transformed ABC notation with tonic drone.
+Transform this ABC notation by adding sustained tonic drone in ABC format:
+- Add a sustained low tonic note (root of the key) that continues through bars
+- Use uppercase for low octave: for A minor use "A", for D major use "D"
+- Make it very long duration using number notation (A4 = whole note, A8 = double whole)
+- Example in A minor: Add "A8" at start to sustain through multiple bars
+- Place the drone in a separate voice or at the beginning of bars
+- The drone should be constant while melody moves above it
+- Example: "|:A8 eAA Bcd|eaf ged|" (A drone sustains while melody plays)
+Output ONLY the complete transformed ABC notation with tonic drone added.
 """,
 
     "fifth_drone_sustain": """
-Transform this ABC notation by adding sustained fifth drone:
-- Sustain a root-fifth interval continuously
-- Most characteristic Irish traditional sound
-- Example: G-D drone in G major/Mixolydian tunes
-- Creates neither major nor minor feeling
-- Allow melody to define modal character over drone
-- Bass register placement
-Output the transformed ABC notation with sustained fifth drone.
+Transform this ABC notation by adding sustained fifth drone in ABC format:
+- Add a sustained root-fifth interval using square brackets [AE] or [DA]
+- Use uppercase for low octave and make very long duration with numbers
+- Example for A minor: "[AE]8" sustains A and E together for 8 beats
+- Place at the start of phrases and let it sustain
+- Example: "|:[AE]8 eAA Bcd|eaf ged|" (root-fifth drone while melody plays)
+- This creates the classic Irish traditional drone sound
+- Neither major nor minor - just root and fifth
+Output ONLY the complete transformed ABC notation with fifth drone added.
 """,
 
     "modal_drone_ambiguity": """
-Transform this ABC notation by adding ambiguous modal drone:
-- Use root and fifth only - absolutely no third
-- Sustain or repeat to create drone effect
-- Allow tune to shift between major/minor/modal freely over drone
-- Particularly effective for Dorian and Mixolydian modes
-- Don't force functional harmony - provide foundation only
-- Keep texture open and uncommitted
-Output the transformed ABC notation with modal drone.
+Transform this ABC notation by adding ambiguous modal drone in ABC format:
+- Add root and fifth intervals ONLY - NO thirds to maintain modal ambiguity
+- Use square brackets for simultaneous notes [AE] or [DA]
+- Can be sustained long notes OR repeated on beats
+- Example sustained: "|:[AE]8 eAA Bcd|" (one long drone)
+- Example repeated: "|:[AE][AE][AE] Bcd|" (repeated drone pulses)
+- Allows the melody to move between major/minor/modal over neutral drone
+- Works great for Dorian and Mixolydian tunes
+Output ONLY the complete transformed ABC notation with modal drone added.
 """,
 
     "regulator_style_chords": """

@@ -11,70 +11,70 @@
     <div class="container">
         <div class="section">
             <h1>📊 Session Analysis</h1>
-            <p>Analyze variations from The Session and compare different settings</p>
+            <p>Analyze how musicians vary tunes on The Session, with AI-powered narrative analysis</p>
             <button class="back-button" onclick="window.location.href='index.html'">← Back to Index</button>
-        </div>
-
-        <div class="section warning">
-            <strong>⚠️ Warning:</strong> This section is experimental and untested. Use at your own risk.
         </div>
 
         <div class="section">
             <div class="input-group">
-                <label for="session-url">The Session URL (required):</label>
-                <input type="text" id="session-url" placeholder="https://thesession.org/tunes/1234">
-                <small style="color: #666;">Enter a Session URL to analyze tune variations</small>
+                <label for="session-url">The Session URL:</label>
+                <input type="text" id="session-url" placeholder="https://thesession.org/tunes/123" value="https://thesession.org/tunes/335">
+                <small style="color: #666;">Enter a tune URL from thesession.org to analyze variations</small>
             </div>
 
-            <button onclick="analyzeSession()">Analyze Session</button>
+            <button onclick="analyzeVariations()">Analyze Variations</button>
+        </div>
+
+        <div class="playback-controls">
+            <div class="tempo-control">
+                <label for="tempo-slider">Tempo (BPM):</label>
+                <input type="range" id="tempo-slider" min="60" max="240" value="120" step="5">
+                <input type="number" id="tempo-value" min="60" max="240" value="120" step="5">
+            </div>
+            <button class="stop-button" onclick="stopPlayback()">⏹ Stop All</button>
         </div>
 
         <div id="error-output" class="section error" style="display:none;">
             <strong>Error:</strong> <span id="error-message"></span>
         </div>
 
-        <div id="session-output" style="display:none;">
+        <div id="output-section" style="display:none;">
             <div class="section">
                 <h2 id="tune-title"></h2>
-                <div id="tune-info"></div>
+                <p id="tune-metadata"></p>
             </div>
 
-            <div class="section" id="comparison-section" style="display:none;">
+            <div id="narrative-container" class="section">
                 <h3>Variation Analysis</h3>
-                <div id="comparison-content"></div>
+                <div id="narrative-content" style="white-space: pre-wrap; line-height: 1.8; font-size: 1.05em;"></div>
             </div>
 
-            <div class="section" id="examples-section" style="display:none;">
-                <h3>Example Variations</h3>
-                <div id="examples-content"></div>
-            </div>
-
-            <div class="section" id="techniques-section" style="display:none;">
-                <h3>Unique Techniques Used</h3>
-                <div id="techniques-content"></div>
-            </div>
-
-            <div class="section" id="settings-section" style="display:none;">
-                <h3>ABC Settings</h3>
-                <div id="settings-content"></div>
-            </div>
+            <div id="examples-container"></div>
         </div>
     </div>
 
     <script type="module">
-        import { renderAbc } from './shared/playback.js';
+        import { playVariation, stopAllPlayback, renderAbc } from './shared/playback.js';
 
-        // Show warning on load
-        window.addEventListener('DOMContentLoaded', () => {
-            const hasSeenWarning = sessionStorage.getItem('session-warning-seen');
-            if (!hasSeenWarning) {
-                alert('⚠️ WARNING: This section is experimental and untested.\n\nUse at your own risk. Features may be incomplete or contain bugs.');
-                sessionStorage.setItem('session-warning-seen', 'true');
-            }
+        // State
+        let variationAbcs = {};
+
+        // Sync tempo controls
+        const tempoSlider = document.getElementById('tempo-slider');
+        const tempoValue = document.getElementById('tempo-value');
+
+        tempoSlider.addEventListener('input', () => {
+            tempoValue.value = tempoSlider.value;
         });
 
-        async function analyzeSession() {
-            console.log('[SESSION] Analyzing...');
+        tempoValue.addEventListener('input', () => {
+            tempoSlider.value = tempoValue.value;
+        });
+
+
+        // Analyze variations
+        window.analyzeVariations = async function() {
+            console.log('[LLM] Analyzing variations...');
 
             const url = document.getElementById('session-url').value.trim();
 
@@ -83,18 +83,25 @@
                 return;
             }
 
-            hideError();
-            document.getElementById('session-output').style.display = 'none';
+            if (!url.includes('thesession.org')) {
+                showError('Please provide a valid thesession.org URL');
+                return;
+            }
 
-            // Show loading message (not in error section)
-            document.getElementById('session-output').style.display = 'block';
-            document.getElementById('session-output').innerHTML = '<p>⏳ Analyzing session...</p>';
+            hideError();
+            document.getElementById('output-section').style.display = 'none';
+
+            // Show spinner
+            document.getElementById('narrative-content').textContent = '⏳ Fetching variations and analyzing... (this may take 1-2 minutes)';
+            document.getElementById('output-section').style.display = 'block';
 
             try {
-                const response = await fetch('/analyze-session', {
+                const response = await fetch('/analyze-session-variations', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: url })
+                    body: JSON.stringify({
+                        url: url
+                    })
                 });
 
                 if (!response.ok) {
@@ -102,111 +109,71 @@
                 }
 
                 const data = await response.json();
-                console.log('[SESSION] Response:', data);
+                console.log('[LLM] Response:', data);
 
                 if (data.error) {
-                    showError(data.message + ': ' + data.error);
+                    const errorMsg = data.message + ': ' + data.error;
+                    alert('❌ Error: ' + errorMsg);
+                    showError(errorMsg);
+                    document.getElementById('output-section').style.display = 'none';
                     return;
                 }
 
-                // Display tune info
+                // Display tune metadata
                 document.getElementById('tune-title').textContent = data.title;
-                document.getElementById('tune-info').innerHTML = `
-                    <p><strong>Type:</strong> ${data.type} | <strong>Key:</strong> ${data.key}</p>
-                    <p><strong>Settings found:</strong> ${data.num_settings}</p>
-                `;
+                document.getElementById('tune-metadata').textContent =
+                    `${data.type} in ${data.key} | ${data.num_settings} settings analyzed`;
 
-                // Display comparison if available
-                if (data.comparison) {
-                    const comp = data.comparison;
+                // Display narrative
+                document.getElementById('narrative-content').textContent = data.narrative;
 
-                    if (comp.message) {
-                        document.getElementById('comparison-content').innerHTML = `<p><em>${comp.message}</em></p>`;
-                    } else {
-                        document.getElementById('comparison-content').innerHTML = `
-                            <ul>
-                                <li><strong>Bars analyzed:</strong> ${comp.num_bars_analyzed}</li>
-                                <li><strong>Bars that vary:</strong> ${comp.differences ? comp.differences.length : 0}</li>
-                                <li><strong>Stability score:</strong> ${(comp.stability_score * 100).toFixed(1)}%</li>
-                            </ul>
-                        `;
+                // Clear previous examples
+                variationAbcs = {};
+                document.getElementById('examples-container').innerHTML = '';
 
-                        // Show example changes if available
-                        if (comp.example_changes && comp.example_changes.length > 0) {
-                            let examplesHtml = '';
-                            comp.example_changes.forEach((ex, barIdx) => {
-                                examplesHtml += `<div style="margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-left: 3px solid #666;">`;
-                                examplesHtml += `<strong>Bar ${ex.bar_number}:</strong><br>`;
-                                ex.examples.forEach((bar, idx) => {
-                                    // Create a unique ID for each notation rendering
-                                    const notationId = `notation-bar${barIdx}-version${idx}`;
-                                    examplesHtml += `<div style="margin: 10px 0;">`;
-                                    examplesHtml += `<strong style="font-size: 0.9em;">Version ${idx + 1}:</strong>`;
-                                    examplesHtml += `<div id="${notationId}" class="notation" style="background: ${idx === 0 ? 'white' : '#fffacd'}; padding: 5px;"></div>`;
-                                    examplesHtml += `</div>`;
-                                });
-                                examplesHtml += `</div>`;
-                            });
-                            document.getElementById('examples-content').innerHTML = examplesHtml;
-                            document.getElementById('examples-section').style.display = 'block';
+                // Render examples with play buttons
+                if (data.examples && data.examples.length > 0) {
+                    let html = '<div class="section"><h3>Musical Examples</h3></div>';
 
-                            // Render each notation snippet
-                            // Get headers from first setting
-                            const firstSetting = data.settings[0];
-                            const lines = firstSetting.split('\n');
-                            const headerEnd = lines.findIndex(l => l.startsWith('K:'));
-                            const headers = lines.slice(0, headerEnd + 1).join('\n');
+                    data.examples.forEach((example, i) => {
+                        variationAbcs[`example-${i}`] = example.abc;
 
-                            comp.example_changes.forEach((ex, barIdx) => {
-                                ex.examples.forEach((bar, idx) => {
-                                    const notationId = `notation-bar${barIdx}-version${idx}`;
-                                    const snippetABC = headers + '\n|' + bar + '|';
-                                    renderAbc(notationId, snippetABC);
-                                });
-                            });
-                        }
-
-                        // Show unique techniques
-                        if (comp.unique_approaches && comp.unique_approaches.length > 0) {
-                            let techHtml = '<ul>';
-                            comp.unique_approaches.forEach(approach => {
-                                techHtml += `<li><strong>${approach.technique}</strong>: ${approach.description} (Settings: ${approach.settings.join(', ')})</li>`;
-                            });
-                            techHtml += '</ul>';
-                            document.getElementById('techniques-content').innerHTML = techHtml;
-                            document.getElementById('techniques-section').style.display = 'block';
-                        }
-                    }
-
-                    document.getElementById('comparison-section').style.display = 'block';
-                }
-
-                // Show settings
-                if (data.settings && data.settings.length > 0) {
-                    let settingsHtml = '';
-                    data.settings.slice(0, 3).forEach((setting, i) => {
-                        settingsHtml += `
-                            <details>
-                                <summary>Setting ${i + 1}</summary>
-                                <pre style="background: #f5f5f5; padding: 10px; overflow-x: auto;">${setting}</pre>
-                            </details>
+                        html += `
+                            <div class="section variation">
+                                <h4>${example.title}</h4>
+                                <p class="description">${example.description}</p>
+                                <div id="example-${i}" class="notation"></div>
+                                <button class="play-button" onclick="playExample(${i})">▶ Play</button>
+                            </div>
                         `;
                     });
-                    if (data.settings.length > 3) {
-                        settingsHtml += `<p><em>...and ${data.settings.length - 3} more settings</em></p>`;
-                    }
-                    document.getElementById('settings-content').innerHTML = settingsHtml;
-                    document.getElementById('settings-section').style.display = 'block';
+
+                    document.getElementById('examples-container').innerHTML = html;
+
+                    // Render all examples
+                    data.examples.forEach((example, i) => {
+                        renderAbc(`example-${i}`, example.abc);
+                    });
                 }
 
-                document.getElementById('session-output').style.display = 'block';
-
             } catch (error) {
-                console.error('[SESSION ERROR]', error);
+                console.error('[LLM ERROR]', error);
                 showError(error.message);
+                document.getElementById('output-section').style.display = 'none';
             }
-        }
+        };
 
+        // Playback functions
+        window.playExample = function(index) {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation(`example-${index}`, variationAbcs, tempo);
+        };
+
+        window.stopPlayback = function() {
+            stopAllPlayback();
+        };
+
+        // Error handling
         function showError(message) {
             document.getElementById('error-message').textContent = message;
             document.getElementById('error-output').style.display = 'block';

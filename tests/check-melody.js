@@ -47,21 +47,47 @@ const { chromium } = require('playwright');
   console.log('\nTaking screenshot...');
   await page.screenshot({ path: '/tmp/melody-with-variation.png', fullPage: true });
 
-  console.log('\nChecking DOM for full-tune elements...');
-  const fullTuneElements = await page.$$('[id^="full-tune-"]');
-  console.log('Found', fullTuneElements.length, 'full-tune elements');
+  console.log('\nChecking variations...');
 
-  for (let i = 0; i < fullTuneElements.length; i++) {
-    const id = await fullTuneElements[i].getAttribute('id');
-    const innerHTML = await fullTuneElements[i].innerHTML();
-    const hasContent = innerHTML.trim().length > 0;
-    const boundingBox = await fullTuneElements[i].boundingBox();
-    console.log(`  ${id}: ${hasContent ? 'HAS CONTENT' : 'EMPTY'} (${innerHTML.length} chars)`);
-    console.log(`    BoundingBox: ${JSON.stringify(boundingBox)}`);
+  // Get all variation sections
+  const variations = await page.$$('.variation');
+  console.log('Found', variations.length, 'variation sections');
 
-    // Check if SVG is inside
-    const svgCount = await fullTuneElements[i].locator('svg').count();
-    console.log(`    SVG elements: ${svgCount}`);
+  for (let i = 0; i < Math.min(3, variations.length); i++) {
+    const variation = variations[i];
+
+    // Get the description
+    const descText = await variation.$eval('.description', el => el.textContent);
+    console.log(`\nVariation ${i + 1}: ${descText}`);
+
+    // Take a focused screenshot of this variation
+    const bbox = await variation.boundingBox();
+    if (bbox) {
+      await page.screenshot({
+        path: `/tmp/variation-${i + 1}.png`,
+        clip: {
+          x: bbox.x,
+          y: bbox.y,
+          width: Math.min(bbox.width, 1200),
+          height: Math.min(bbox.height, 800)
+        }
+      });
+      console.log(`  Screenshot saved to /tmp/variation-${i + 1}.png`);
+    }
+
+    // Check for highlighted bars in full tune
+    const svg = await variation.$('svg');
+    if (svg) {
+      // Count yellow rectangles
+      const rects = await variation.$$eval('rect[fill="#ffeb3b"]', rects => rects.length);
+      console.log(`  Yellow highlight rectangles: ${rects}`);
+
+      // Check for "Varied" text
+      const variedTexts = await variation.$$eval('text', texts =>
+        texts.filter(t => t.textContent.includes('Varied')).length
+      );
+      console.log(`  "Varied" text elements: ${variedTexts}`);
+    }
   }
 
   console.log('\nDone.');

@@ -205,12 +205,7 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                                 <h4>Variation ${variationIndex + 1}</h4>
                                 <p class="description">${barList}: ${group.original} → ${group.modified}</p>
                                 <div id="snippet-${variationIndex}" class="notation"></div>
-                                <div style="margin-top: 15px; padding: 10px; background-color: #fffef0; border-left: 4px solid #ffeb3b; border-radius: 4px;">
-                                    <p style="margin: 0 0 10px 0; font-size: 12px; color: #666;">
-                                        <strong>Full Tune with Variation</strong> (${barList} highlighted)
-                                    </p>
-                                    <div id="full-tune-${variationIndex}" class="notation"></div>
-                                </div>
+                                <div id="full-tune-${variationIndex}" class="notation" style="margin-top: 15px;"></div>
                                 <div style="margin-top: 10px;">
                                     <button class="play-button" onclick="playSnippet(${variationIndex})">▶ Play Snippet</button>
                                     <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
@@ -226,7 +221,9 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                     // Render all snippets and full tunes
                     variationIndex = 0;
                     Object.values(groupedBars).forEach(group => {
+                        // Render snippet
                         const snippetABC = headers + '\n|' + group.modified + '|';
+                        variationAbcs[`snippet-${variationIndex}`] = snippetABC;
                         renderAbc(`snippet-${variationIndex}`, snippetABC);
 
                         // Create full tune with variation substituted and highlighted
@@ -379,10 +376,7 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
             const headerEnd = lines.findIndex(l => l.startsWith('K:'));
             const headers = lines.slice(0, headerEnd + 1).join('\n');
             const bodyLines = lines.slice(headerEnd + 1);
-            const body = bodyLines.join('\n');
-
-            // Split into bars
-            const bars = body.split('|').filter(b => b.trim());
+            const body = bodyLines.join('\n').replace(/\s+/g, ' ').trim();
 
             // Create a map of bar number to modified content
             const modifications = {};
@@ -392,19 +386,62 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                 }
             });
 
-            // Reconstruct with modifications and add color annotations for highlighted bars
-            const modifiedBars = bars.map((bar, idx) => {
-                const barNumber = idx + 1;
-                const barContent = modifications[barNumber] || bar;
+            console.log('[MELODY] Original body:', body);
+            console.log('[MELODY] Target bar numbers:', targetBarNumbers);
+            console.log('[MELODY] Modifications:', modifications);
 
-                // Add yellow background annotation for modified bars
-                if (modifications[barNumber]) {
-                    return `"_Varied"${barContent}`;
+            // Split by | but need to handle repeat markers like |: and :| correctly
+            // These are NOT bar separators, they're repeat markers
+            const parts = body.split('|');
+
+            let result = headers + '\n';
+            let currentBarNum = 0;
+
+            for (let i = 0; i < parts.length; i++) {
+                let part = parts[i].trim();
+
+                // Handle bar separator
+                if (i > 0) {
+                    result += '|';
                 }
-                return barContent;
-            });
 
-            return headers + '\n|' + modifiedBars.join('|') + '|';
+                // Skip truly empty parts
+                if (!part) {
+                    continue;
+                }
+
+                // Check if this part is a repeat marker (: at start or end)
+                const startsWithRepeat = part.startsWith(':');
+                const endsWithRepeat = part.endsWith(':');
+
+                if (startsWithRepeat) {
+                    result += ':';
+                    part = part.substring(1).trim();
+                }
+
+                // If there's actual music content (not just a repeat marker)
+                if (part && part !== ':') {
+                    currentBarNum++;
+
+                    // Check if this bar should be modified
+                    const barContent = modifications[currentBarNum] || part;
+
+                    // Add annotation BEFORE the bar content if it's modified
+                    if (modifications[currentBarNum]) {
+                        result += `"_Varied"${barContent}`;
+                        console.log(`[MELODY] Added "Varied" annotation to bar ${currentBarNum}: ${barContent}`);
+                    } else {
+                        result += barContent;
+                    }
+                }
+
+                if (endsWithRepeat && !startsWithRepeat) {
+                    result += ':';
+                }
+            }
+
+            console.log('[MELODY] Final ABC (first 400 chars):', result.substring(0, 400));
+            return result;
         }
 
         // Helper: Render ABC with highlighted bars
@@ -422,82 +459,67 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                 responsive: 'resize'
             });
 
-            // Wait for render, then add yellow boxes behind specific bars
+            // Wait for render, then find and highlight the "Varied" annotations
             setTimeout(() => {
                 if (!visualObjs || visualObjs.length === 0) return;
 
                 const svg = element.querySelector('svg');
                 if (!svg) return;
 
-                const visualObj = visualObjs[0];
-                if (!visualObj.lines) return;
+                // Find all text elements with "Varied" annotation
+                const textElements = svg.querySelectorAll('text');
+                const variedAnnotations = [];
 
-                // Track bar numbers and collect bounding boxes
-                let currentBarNum = 1;
-                const barBoxes = new Map(); // Map of bar number to bounding box
-
-                visualObj.lines.forEach(line => {
-                    if (!line.staff || !line.staff[0] || !line.staff[0].voices) return;
-
-                    const voice = line.staff[0].voices[0];
-                    if (!voice) return;
-
-                    let barMinX = null, barMaxX = null, barMinY = null, barMaxY = null;
-
-                    voice.forEach((element, idx) => {
-                        // Accumulate bounds for current bar
-                        if (element.abselem && element.abselem.elemset) {
-                            element.abselem.elemset.forEach(domEl => {
-                                try {
-                                    const bbox = domEl.getBBox();
-                                    if (barMinX === null || bbox.x < barMinX) barMinX = bbox.x;
-                                    if (barMaxX === null || bbox.x + bbox.width > barMaxX) barMaxX = bbox.x + bbox.width;
-                                    if (barMinY === null || bbox.y < barMinY) barMinY = bbox.y;
-                                    if (barMaxY === null || bbox.y + bbox.height > barMaxY) barMaxY = bbox.y + bbox.height;
-                                } catch (e) {}
-                            });
-                        }
-
-                        // When we hit a bar line, save the current bar's bounds
-                        if (element.el_type === 'bar') {
-                            if (barMinX !== null && highlightedBarNumbers.includes(currentBarNum)) {
-                                barBoxes.set(currentBarNum, {
-                                    x: barMinX - 3,
-                                    y: barMinY - 3,
-                                    width: barMaxX - barMinX + 6,
-                                    height: barMaxY - barMinY + 6
-                                });
-                                console.log(`[MELODY] Bar ${currentBarNum} bounds:`, barBoxes.get(currentBarNum));
-                            }
-                            currentBarNum++;
-                            barMinX = barMaxX = barMinY = barMaxY = null;
-                        }
-                    });
-
-                    // Handle last bar in line
-                    if (barMinX !== null && highlightedBarNumbers.includes(currentBarNum)) {
-                        barBoxes.set(currentBarNum, {
-                            x: barMinX - 3,
-                            y: barMinY - 3,
-                            width: barMaxX - barMinX + 6,
-                            height: barMaxY - barMinY + 6
-                        });
-                        console.log(`[MELODY] Bar ${currentBarNum} bounds (final):`, barBoxes.get(currentBarNum));
+                textElements.forEach(textEl => {
+                    if (textEl.textContent.includes('Varied')) {
+                        variedAnnotations.push(textEl);
+                        // Hide the annotation text
+                        textEl.style.display = 'none';
                     }
                 });
 
-                // Draw yellow rectangles for highlighted bars
-                console.log(`[MELODY] Drawing ${barBoxes.size} highlight rectangles`);
-                barBoxes.forEach((box, barNum) => {
-                    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                    rect.setAttribute('x', box.x);
-                    rect.setAttribute('y', box.y);
-                    rect.setAttribute('width', box.width);
-                    rect.setAttribute('height', box.height);
-                    rect.setAttribute('fill', '#ffeb3b');
-                    rect.setAttribute('opacity', '0.5');
-                    rect.setAttribute('rx', '3');
-                    svg.insertBefore(rect, svg.firstChild);
+                console.log(`[MELODY] Found ${variedAnnotations.length} "Varied" annotations`);
+
+                // For each annotation, find the bar that follows it and highlight it
+                variedAnnotations.forEach(annotation => {
+                    const annotationX = parseFloat(annotation.getAttribute('x'));
+                    const annotationY = parseFloat(annotation.getAttribute('y'));
+
+                    console.log(`[MELODY] Annotation at x=${annotationX}, y=${annotationY}`);
+
+                    // Collect all note elements to the right of this annotation until the next bar line
+                    let minX = null, maxX = null, minY = null, maxY = null;
+
+                    const allElements = svg.querySelectorAll('path, rect, text');
+                    allElements.forEach(el => {
+                        try {
+                            const bbox = el.getBBox();
+                            const elX = bbox.x;
+                            const elY = bbox.y;
+
+                            // Check if this element is near the annotation vertically and to its right
+                            // Look for elements within the same staff (similar Y) and after the annotation
+                            if (Math.abs(elY - annotationY) < 50 && elX >= annotationX && elX < annotationX + 150) {
+                                if (minX === null || bbox.x < minX) minX = bbox.x;
+                                if (maxX === null || bbox.x + bbox.width > maxX) maxX = bbox.x + bbox.width;
+                                if (minY === null || bbox.y < minY) minY = bbox.y;
+                                if (maxY === null || bbox.y + bbox.height > maxY) maxY = bbox.y + bbox.height;
+                            }
+                        } catch (e) {}
+                    });
+
+                    if (minX !== null) {
+                        console.log(`[MELODY] Highlighting region: x=${minX}, y=${minY}, w=${maxX-minX}, h=${maxY-minY}`);
+                        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                        rect.setAttribute('x', minX - 3);
+                        rect.setAttribute('y', minY - 3);
+                        rect.setAttribute('width', maxX - minX + 6);
+                        rect.setAttribute('height', maxY - minY + 6);
+                        rect.setAttribute('fill', '#ffeb3b');
+                        rect.setAttribute('opacity', '0.5');
+                        rect.setAttribute('rx', '3');
+                        svg.insertBefore(rect, svg.firstChild);
+                    }
                 });
             }, 200);
         };

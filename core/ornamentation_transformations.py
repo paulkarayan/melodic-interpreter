@@ -54,9 +54,10 @@ Transform this ABC notation by adding long rolls in jig-appropriate positions:
 - **Critical:** Think as THREE notes, not five - hold first note long, add percussive grace notes
 - Place on dotted quarter notes in jigs
 - Place on quarter note followed by eighth of same pitch
-- Place on three eighths where first and third are identical (EDE becomes ~E~)
+- Place on three eighths where first and third are identical (EDE becomes roll on E)
 - Takes time value of dotted quarter note
-- In ABC notation: ~A represents a long roll on A
+- In ABC notation: Use explicit grace note syntax like {B}A{G}A for a roll on A (cut above, main, tap below, main)
+- DO NOT use ~ shorthand - always write out the full grace note pattern
 Output the transformed ABC notation with long rolls in traditional jig positions.
 """,
 
@@ -67,7 +68,8 @@ Transform this ABC notation by adding short rolls in reel-appropriate positions:
 - More common in reels than jigs
 - Same articulation principle: percussive grace notes, not melodic
 - Place on quarter notes and at phrase beginnings
-- In ABC notation: {B}A{G}A represents short roll on A
+- In ABC notation: {B}A{G}A represents short roll on A (cut above, main, tap below, main)
+- DO NOT use ~ shorthand - always write out the full grace note pattern
 Output the transformed ABC notation with short rolls for reels.
 """,
 

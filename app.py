@@ -75,11 +75,6 @@ async def session():
     """Serve session analysis page"""
     return FileResponse('session.html')
 
-@app.get("/llm.html", response_class=HTMLResponse)
-async def llm():
-    """Serve LLM transformations page"""
-    return FileResponse('llm.html')
-
 @app.get("/melody-prompt.html", response_class=HTMLResponse)
 async def melody_prompt():
     """Serve AI melodic transformations page"""
