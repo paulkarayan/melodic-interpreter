@@ -178,68 +178,21 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                 document.getElementById('transformation-explanation').textContent =
                     data.explanation || '';
 
-                // Render changed bars as separate snippets (like melody.html)
-                if (data.changed_bars && data.changed_bars.length > 0) {
-                    // Group bars by their modified content
-                    const groupedBars = {};
-                    data.changed_bars.forEach(bar => {
-                        const key = bar.modified;
-                        if (!groupedBars[key]) {
-                            groupedBars[key] = {
-                                modified: bar.modified,
-                                original: bar.original,
-                                bars: []
-                            };
-                        }
-                        groupedBars[key].bars.push(bar.bar_number);
-                    });
+                // Always render the full transformed score first
+                variationAbcs['full-transformation'] = data.transformed_abc;
+                let html = `
+                    <h4>Full Score with Harmony</h4>
+                    <div id="full-transformation" class="notation"></div>
+                    <div style="margin-top: 10px;">
+                        <button class="play-button" onclick="playFullTransformation()">▶ Play Full Score</button>
+                        <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                    </div>
+                `;
 
-                    let html = '';
-                    let variationIndex = 0;
+                document.getElementById('transformations-container').innerHTML = html;
 
-                    Object.values(groupedBars).forEach(group => {
-                        const snippetABC = headers + '\n|' + group.modified + '|';
-                        variationAbcs[`snippet-${variationIndex}`] = snippetABC;
-
-                        const barList = group.bars.length === 1
-                            ? `Bar ${group.bars[0]}`
-                            : `Bars ${group.bars.join(', ')}`;
-
-                        html += `
-                            <div class="section variation" style="margin-top: 20px;">
-                                <h4>Variation ${variationIndex + 1}</h4>
-                                <p class="description">${barList}: ${group.original} → ${group.modified}</p>
-                                <div id="snippet-${variationIndex}" class="notation"></div>
-                                <div style="margin-top: 10px;">
-                                    <button class="play-button" onclick="playSnippet(${variationIndex})">▶ Play</button>
-                                    <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
-                                </div>
-                            </div>
-                        `;
-                        variationIndex++;
-                    });
-
-                    document.getElementById('transformations-container').innerHTML = html;
-
-                    // Render all snippets
-                    variationIndex = 0;
-                    Object.values(groupedBars).forEach(group => {
-                        const snippetABC = headers + '\n|' + group.modified + '|';
-                        renderAbc(`snippet-${variationIndex}`, snippetABC);
-                        variationIndex++;
-                    });
-                } else {
-                    // Fallback: render full transformation
-                    variationAbcs['full-transformation'] = data.transformed_abc;
-                    document.getElementById('transformations-container').innerHTML = `
-                        <div id="full-transformation" class="notation"></div>
-                        <div style="margin-top: 10px;">
-                            <button class="play-button" onclick="playFullTransformation()">▶ Play</button>
-                            <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
-                        </div>
-                    `;
-                    renderAbc('full-transformation', data.transformed_abc);
-                }
+                // Render the full transformation
+                renderAbc('full-transformation', data.transformed_abc);
 
                 document.getElementById('transformation-output').style.display = 'block';
                 document.getElementById('output-section').style.display = 'block';
