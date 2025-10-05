@@ -603,7 +603,7 @@ Analyze these variations and write a narrative analysis (3-4 paragraphs) describ
 
 Write in an engaging, educational tone suitable for musicians learning about variation techniques. Be specific and reference actual musical content from the settings.
 
-After your narrative analysis, select 3-5 of the most interesting and pedagogically valuable settings as examples:
+After your narrative analysis, select UP TO 5 of the most interesting and pedagogically valuable settings as examples (choose 5 if available, fewer only if they're too similar):
 
 {{
   "narrative": "your narrative text here",
@@ -633,7 +633,7 @@ CRITICAL REQUIREMENTS - READ CAREFULLY:
 - For the "description" field: Explain what variation technique THIS ACTUAL SETTING demonstrates
 - The "setting_number" must match which setting you copied from the list above
 - DO NOT create hybrid examples, DO NOT make up new variations
-- Select 3-5 settings that best illustrate different variation techniques
+- Select UP TO 5 settings that best illustrate different variation techniques (only use fewer if the variations are too similar to warrant 5 examples)
 - Use DOUBLE QUOTES for all strings, never single quotes
 - NO trailing commas after the last item in arrays or objects
 - Escape special characters in strings (use \\n for newlines in ABC notation)
@@ -675,7 +675,7 @@ CRITICAL REQUIREMENTS - READ CAREFULLY:
             'type': tune_data['type'],
             'key': tune_data['key'],
             'num_settings': len(settings),
-            'num_analyzed': len(analysis.get('examples', [])),
+            'num_examples': len(analysis.get('examples', [])),
             'narrative': analysis.get('narrative', ''),
             'examples': analysis.get('examples', [])
         }

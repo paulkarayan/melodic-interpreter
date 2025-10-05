@@ -135,7 +135,7 @@
                     <a href="${sessionUrl}" target="_blank" style="font-size: 0.6em; margin-left: 10px;">🔗 View on The Session</a>
                 `;
                 document.getElementById('tune-metadata').textContent =
-                    `${data.type} in ${data.key} | ${data.num_analyzed || data.num_settings} out of ${data.num_settings} settings analyzed`;
+                    `${data.type} in ${data.key} | ${data.num_settings} settings analyzed, showing ${data.num_examples || 0} examples`;
 
                 // Display narrative
                 document.getElementById('narrative-content').textContent = data.narrative;
