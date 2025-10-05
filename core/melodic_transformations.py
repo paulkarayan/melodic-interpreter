@@ -129,6 +129,33 @@ Transform this ABC notation by consolidating note durations:
 - Preserve measure boundaries
 Output ONLY the transformed ABC notation, nothing else.""",
 
+    "make_busier": """
+Transform this ABC notation by arpeggiating long held notes to make them busier:
+- Replace longer notes with arpeggiated patterns of shorter notes
+- Dotted quarter (3/8) → three eighth notes moving through nearby chord tones
+- Quarter note (1/4) → two eighth notes moving stepwise or through chord tones
+- Half note → four eighth notes creating melodic interest
+- Use scale steps and chord tones appropriate to the mode
+- Example in A Dorian: "A3" (dotted quarter) could become "AcA" or "ABA"
+- Example: "d2" (half note) could become "dcBA" or "dede"
+- Maintain overall phrase structure and measure boundaries
+- Stay within the mode
+Output ONLY the transformed ABC notation, nothing else.""",
+
+    "tripleter": """
+Transform this ABC notation by injecting triplets into longer notes:
+- Replace quarter notes and longer durations with eighth-note triplets
+- Use ABC triplet notation: (3ABC for triplet of A, B, C
+- Quarter note → (3ABC where ABC are scale-appropriate notes
+- Dotted quarter → (3ABC D where the triplet fills part of the duration
+- Common in Irish music for adding rhythmic interest
+- Example: "A2" becomes "(3ABA c" or "(3cBA G"
+- Example: "d" becomes "(3dcB" (fills a quarter note with triplet)
+- Use neighbor tones, passing tones, or chord tones for triplet notes
+- Maintain phrase structure and stay within mode
+- Preserve measure boundaries
+Output ONLY the transformed ABC notation, nothing else.""",
+
     "dotted_rhythm_introduction": """
 Transform this ABC notation by introducing dotted rhythms:
 - Convert even rhythms to dotted patterns (long-short)

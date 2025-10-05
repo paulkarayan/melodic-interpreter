@@ -37,6 +37,25 @@ Return ONLY the modified ABC notation, preserving all headers.""",
 - Keep phrase structure clear
 Return ONLY the modified ABC notation, preserving all headers.""",
 
+    'make_busier': """Arpeggiate long held notes to make them busier:
+- Replace longer notes with arpeggiated patterns of shorter notes
+- Dotted quarter (3/8) → three eighth notes moving through nearby chord tones
+- Quarter note (1/4) → two eighth notes moving stepwise or through chord tones
+- Use scale steps and chord tones appropriate to the mode
+- Example in A Dorian: "A3" could become "AcA" or "ABA"
+- Maintain overall phrase structure and measure boundaries
+Return ONLY the modified ABC notation, preserving all headers.""",
+
+    'tripleter': """Inject triplets into longer notes:
+- Replace quarter notes and longer durations with eighth-note triplets
+- Use ABC triplet notation: (3ABC for triplet of A, B, C
+- Quarter note → (3ABC where ABC are scale-appropriate notes
+- Common in Irish music for adding rhythmic interest
+- Example: "d" becomes "(3dcB" (fills a quarter note with triplet)
+- Use neighbor tones, passing tones, or chord tones for triplet notes
+- Maintain phrase structure and stay within mode
+Return ONLY the modified ABC notation, preserving all headers.""",
+
     'arpeggiation': """Replace scalar passages with arpeggios:
 - Identify scale runs and substitute with chord-tone arpeggios
 - Use diatonic harmony (A Dorian mode)
@@ -112,6 +131,8 @@ MELODIC_DESCRIPTIONS = {
     'neighbor': "Neighbor tone substitution - traditional variation technique",
     'phrase_ending': "Phrase ending variation - vary cadential patterns",
     'note_consolidation': "Note consolidation - combine repeated notes into longer durations",
+    'make_busier': "Make busier - arpeggiate long held notes into shorter, busier patterns",
+    'tripleter': "Tripleter - inject eighth-note triplets into longer notes",
     'arpeggiation': "Arpeggiation - replace scales with chord tone arpeggios",
     'motivic_sequence': "Motivic sequence - repeat fragments at different pitch levels",
     'contour_simplification': "Contour simplification - smooth out melodic zigzags",
