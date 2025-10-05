@@ -92,6 +92,11 @@ async def ornamentation_prompt():
     return FileResponse('ornamentation-prompt.html')
 
 
+@app.get("/reharmonize.html", response_class=HTMLResponse)
+async def reharmonize_page():
+    """Serve reharmonization analysis page"""
+    return FileResponse('reharmonize.html')
+
 
 @app.post("/generate")
 async def generate_variations(req: VariationRequest):
