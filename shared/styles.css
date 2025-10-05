@@ -175,6 +175,9 @@ button:disabled {
     text-align: center;
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
+    text-decoration: none;
+    color: inherit;
+    display: block;
 }
 
 .app-card:hover {

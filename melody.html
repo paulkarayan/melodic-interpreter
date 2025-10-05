@@ -388,6 +388,7 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
 
             console.log('[MELODY] Original body:', body);
             console.log('[MELODY] Target bar numbers:', targetBarNumbers);
+            console.log('[MELODY] changedBars:', JSON.stringify(changedBars, null, 2));
             console.log('[MELODY] Modifications:', modifications);
 
             // Split by | but need to handle repeat markers like |: and :| correctly
@@ -423,13 +424,31 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                 if (part && part !== ':') {
                     currentBarNum++;
 
-                    // Check if this bar should be modified
-                    const barContent = modifications[currentBarNum] || part;
+                    // Check if this bar should be modified - try both by bar number AND by matching original content
+                    let barContent = part;
+                    let isModified = false;
+
+                    // First try by bar number
+                    if (modifications[currentBarNum]) {
+                        barContent = modifications[currentBarNum];
+                        isModified = true;
+                    } else {
+                        // If not found by number, try to match by original content
+                        for (const [barNum, modifiedContent] of Object.entries(modifications)) {
+                            const originalForBar = changedBars.find(cb => cb.bar_number === parseInt(barNum))?.original;
+                            if (originalForBar && part.includes(originalForBar.trim())) {
+                                barContent = modifiedContent;
+                                isModified = true;
+                                console.log(`[MELODY] Matched bar ${currentBarNum} by content (backend said bar ${barNum}): ${originalForBar} → ${barContent}`);
+                                break;
+                            }
+                        }
+                    }
 
                     // Add annotation BEFORE the bar content if it's modified
-                    if (modifications[currentBarNum]) {
-                        result += `"_Varied"${barContent}`;
-                        console.log(`[MELODY] Added "Varied" annotation to bar ${currentBarNum}: ${barContent}`);
+                    if (isModified) {
+                        result += `"^VARIED"${barContent}`;
+                        console.log(`[MELODY] Added "VARIED" annotation to bar ${currentBarNum}: ${barContent}`);
                     } else {
                         result += barContent;
                     }
@@ -459,69 +478,8 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                 responsive: 'resize'
             });
 
-            // Wait for render, then find and highlight the "Varied" annotations
-            setTimeout(() => {
-                if (!visualObjs || visualObjs.length === 0) return;
-
-                const svg = element.querySelector('svg');
-                if (!svg) return;
-
-                // Find all text elements with "Varied" annotation
-                const textElements = svg.querySelectorAll('text');
-                const variedAnnotations = [];
-
-                textElements.forEach(textEl => {
-                    if (textEl.textContent.includes('Varied')) {
-                        variedAnnotations.push(textEl);
-                        // Hide the annotation text
-                        textEl.style.display = 'none';
-                    }
-                });
-
-                console.log(`[MELODY] Found ${variedAnnotations.length} "Varied" annotations`);
-
-                // For each annotation, find the bar that follows it and highlight it
-                variedAnnotations.forEach(annotation => {
-                    const annotationX = parseFloat(annotation.getAttribute('x'));
-                    const annotationY = parseFloat(annotation.getAttribute('y'));
-
-                    console.log(`[MELODY] Annotation at x=${annotationX}, y=${annotationY}`);
-
-                    // Collect all note elements to the right of this annotation until the next bar line
-                    let minX = null, maxX = null, minY = null, maxY = null;
-
-                    const allElements = svg.querySelectorAll('path, rect, text');
-                    allElements.forEach(el => {
-                        try {
-                            const bbox = el.getBBox();
-                            const elX = bbox.x;
-                            const elY = bbox.y;
-
-                            // Check if this element is near the annotation vertically and to its right
-                            // Look for elements within the same staff (similar Y) and after the annotation
-                            if (Math.abs(elY - annotationY) < 50 && elX >= annotationX && elX < annotationX + 150) {
-                                if (minX === null || bbox.x < minX) minX = bbox.x;
-                                if (maxX === null || bbox.x + bbox.width > maxX) maxX = bbox.x + bbox.width;
-                                if (minY === null || bbox.y < minY) minY = bbox.y;
-                                if (maxY === null || bbox.y + bbox.height > maxY) maxY = bbox.y + bbox.height;
-                            }
-                        } catch (e) {}
-                    });
-
-                    if (minX !== null) {
-                        console.log(`[MELODY] Highlighting region: x=${minX}, y=${minY}, w=${maxX-minX}, h=${maxY-minY}`);
-                        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                        rect.setAttribute('x', minX - 3);
-                        rect.setAttribute('y', minY - 3);
-                        rect.setAttribute('width', maxX - minX + 6);
-                        rect.setAttribute('height', maxY - minY + 6);
-                        rect.setAttribute('fill', '#ffeb3b');
-                        rect.setAttribute('opacity', '0.5');
-                        rect.setAttribute('rx', '3');
-                        svg.insertBefore(rect, svg.firstChild);
-                    }
-                });
-            }, 200);
+            // The "^VARIED" text annotation will display above the staff automatically
+            // No additional highlighting needed
         };
 
         // Error handling

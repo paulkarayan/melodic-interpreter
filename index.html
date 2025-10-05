@@ -15,49 +15,56 @@
         </div>
 
         <div class="app-grid">
-            <div class="app-card ready" onclick="window.location.href='melody.html'">
+            <a href="melody.html" class="app-card ready">
                 <h2>🎼 Melodic Variations</h2>
                 <p>Apply melodic variations to tunes using traditional and contemporary techniques.</p>
                 <span class="status ready">✓ Ready</span>
-            </div>
+            </a>
 
-            <div class="app-card ready" onclick="window.location.href='harmony.html'">
+            <a href="harmony-prompt.html" class="app-card warning" onclick="return showWarning(event, 'harmony-prompt.html')">
                 <h2>🎹 AI Harmony Transformations</h2>
                 <p>Add harmonic accompaniment using AI (drones, power chords, bass patterns, modal harmonies, etc.)</p>
-                <span class="status ready">✓ Ready</span>
-            </div>
+                <span class="status experimental">⚠ Experimental</span>
+            </a>
 
-            <div class="app-card ready" onclick="window.location.href='session.html'">
+            <a href="session.html" class="app-card ready">
                 <h2>📊 Session Analysis</h2>
                 <p>Analyze how musicians vary tunes on The Session with AI-powered narrative analysis and playable examples</p>
                 <span class="status ready">✓ Ready</span>
-            </div>
+            </a>
 
-            <div class="app-card ready" onclick="window.location.href='melody-prompt.html'">
+            <a href="melody-prompt.html" class="app-card ready">
                 <h2>🎵 AI Melodic Transformations</h2>
                 <p>Apply traditional Irish variation techniques using AI (neighbor tones, sequences, contour changes, etc.)</p>
                 <span class="status ready">✓ Ready</span>
-            </div>
+            </a>
 
-            <div class="app-card ready" onclick="window.location.href='ornamentation-prompt.html'">
+            <a href="ornamentation-prompt.html" class="app-card warning" onclick="return showWarning(event, 'ornamentation-prompt.html')">
                 <h2>✨ AI Ornamentation Transformations</h2>
                 <p>Add ornamentation using AI (cuts, rolls, triplets, slides, crans, regional styles, etc.)</p>
-                <span class="status ready">✓ Ready</span>
-            </div>
+                <span class="status experimental">⚠ Experimental</span>
+            </a>
         </div>
 
     </div>
 
     <script>
-        function showWarning(page) {
+        function showWarning(event, page) {
+            event.preventDefault();
             const confirmed = confirm(
                 '⚠️ WARNING: This section is experimental and untested.\n\n' +
                 'Use at your own risk. Features may be incomplete or contain bugs.\n\n' +
                 'Continue anyway?'
             );
             if (confirmed) {
-                window.location.href = page;
+                // Check if it was a middle-click, ctrl-click, or cmd-click (open in new tab)
+                if (event.ctrlKey || event.metaKey || event.button === 1) {
+                    window.open(page, '_blank');
+                } else {
+                    window.location.href = page;
+                }
             }
+            return false;
         }
     </script>
 </body>
