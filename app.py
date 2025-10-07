@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-from core import harmony, melodic, session_scraper, melodic_transformations, harmony_transformations, ornamentation_transformations, reharmonization, harmoniser
+from core import harmony, melodic, session_scraper, melodic_transformations, harmony_transformations, ornamentation_transformations, reharmonization, harmoniser, repetition_detector, brenda_variations, abc_transpose
 from core.melodic import _diff_abc_bars
 
 app = FastAPI(title="Irish Tune Variation Generator")
@@ -39,6 +39,7 @@ class VariationRequest(BaseModel):
     harmony_type: str = 'none'
     melodic_type: str = 'none'
     lick: Optional[str] = None
+    target_repetition: bool = False
     validate_anglo: bool = False
 
 
@@ -158,15 +159,73 @@ async def generate_variations(req: VariationRequest):
     # Generate melodic variation
     if req.melodic_type and req.melodic_type != 'none':
         print(f"[API] Generating melodic variation: {req.melodic_type}")
-        melodic_abc, melodic_desc, changed_bars = melodic.apply_melodic_multiple(
-            req.abc, req.melodic_type, req.lick
-        )
-        results['melodic'] = melodic_abc
-        results['melodic_desc'] = (
-            f"{melodic.MELODIC_DESCRIPTIONS[req.melodic_type]} - {melodic_desc}"
-        )
-        results['melodic_changed_bars'] = changed_bars
-        print(f"[API] Melodic generated: {len(melodic_abc)} chars, {len(changed_bars)} bars changed")
+
+        # Handle "All of the Above" - apply all variations
+        if req.melodic_type == 'all_variations':
+            # Handle target repetition for all variations
+            lick_to_use = req.lick
+            repetition_info = None
+
+            if req.target_repetition and not req.lick:
+                print("[API] Using target repetition mode")
+                repetition_info = repetition_detector.detect_repetition(req.abc)
+                results['repetition_info'] = repetition_info
+
+                if repetition_info['has_repetition']:
+                    target_licks = repetition_detector.get_target_licks(req.abc)
+                    if target_licks:
+                        lick_to_use = target_licks[0]
+                        print(f"[API] Auto-detected lick: {lick_to_use}")
+
+            # Apply all melodic variations to the lick
+            all_melodic_types = list(melodic.MELODIC_DESCRIPTIONS.keys())
+            variations = []
+            all_changed_bars = []
+
+            for m_type in all_melodic_types:
+                variation_abc, variation_desc, changed_bars = melodic.apply_melodic_multiple(
+                    req.abc, m_type, lick_to_use
+                )
+                variations.append({
+                    'abc': variation_abc,
+                    'type': m_type,
+                    'description': f"{melodic.MELODIC_DESCRIPTIONS[m_type]} - {variation_desc}",
+                    'changed_bars': changed_bars
+                })
+                all_changed_bars.extend(changed_bars)
+
+            # Return all variations
+            results['melodic_all_variations'] = variations
+            results['melodic_desc'] = f"All variations applied to the repeated lick ({len(variations)} variations)"
+            results['melodic_changed_bars'] = all_changed_bars
+            print(f"[API] Generated {len(variations)} variations")
+
+        else:
+            # Handle target repetition
+            lick_to_use = req.lick
+            repetition_info = None
+
+            if req.target_repetition and not req.lick:
+                print("[API] Using target repetition mode")
+                repetition_info = repetition_detector.detect_repetition(req.abc)
+                results['repetition_info'] = repetition_info
+
+                if repetition_info['has_repetition']:
+                    # Get the best repeated lick to target
+                    target_licks = repetition_detector.get_target_licks(req.abc)
+                    if target_licks:
+                        lick_to_use = target_licks[0]  # Use the most repeated one
+                        print(f"[API] Auto-detected lick: {lick_to_use}")
+
+            melodic_abc, melodic_desc, changed_bars = melodic.apply_melodic_multiple(
+                req.abc, req.melodic_type, lick_to_use
+            )
+            results['melodic'] = melodic_abc
+            results['melodic_desc'] = (
+                f"{melodic.MELODIC_DESCRIPTIONS[req.melodic_type]} - {melodic_desc}"
+            )
+            results['melodic_changed_bars'] = changed_bars
+            print(f"[API] Melodic generated: {len(melodic_abc)} chars, {len(changed_bars)} bars changed")
 
     # Combined variation
     if (req.harmony_type and req.harmony_type != 'none' and
@@ -375,6 +434,8 @@ Important: Return ONLY valid ABC notation, nothing else. Keep the same headers (
 class MelodyTransformRequest(BaseModel):
     abc: str
     transformation: str
+    lick: Optional[str] = None
+    target_repetition: bool = False
 
 
 class MelodyTransformLuckyRequest(BaseModel):
@@ -410,11 +471,24 @@ async def transform_melody(req: MelodyTransformRequest):
     try:
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
+        # Handle target repetition
+        repetition_info = None
+        lick_instruction = ""
+
+        if req.target_repetition and not req.lick:
+            repetition_info = repetition_detector.detect_repetition(req.abc)
+            if repetition_info['has_repetition']:
+                target_licks = repetition_detector.get_target_licks(req.abc)
+                if target_licks:
+                    lick_instruction = f"\nIMPORTANT: Apply this transformation ONLY to the following repeated pattern: {target_licks[0]}\nDo NOT modify other parts of the tune."
+        elif req.lick:
+            lick_instruction = f"\nIMPORTANT: Apply this transformation ONLY to this specific pattern: {req.lick}\nDo NOT modify other parts of the tune."
+
         prompt = f"""Given this ABC notation for an Irish tune:
 
 {req.abc}
 
-{melodic_transformations.TRANSFORMATIONS[req.transformation]}
+{melodic_transformations.TRANSFORMATIONS[req.transformation]}{lick_instruction}
 
 Return your response in this exact JSON format:
 {{
@@ -454,7 +528,7 @@ IMPORTANT: Return ONLY valid JSON, nothing else."""
         # Diff to find changed bars
         changed_bars = _diff_abc_bars(req.abc, transformed_abc, 5)
 
-        return {
+        response = {
             'original': req.abc,
             'transformed_abc': transformed_abc,
             'transformation': req.transformation,
@@ -462,6 +536,12 @@ IMPORTANT: Return ONLY valid JSON, nothing else."""
             'explanation': explanation,
             'changed_bars': changed_bars
         }
+
+        # Add repetition info if available
+        if repetition_info:
+            response['repetition_info'] = repetition_info
+
+        return response
 
     except Exception as e:
         return {
@@ -579,7 +659,8 @@ async def analyze_session_variations(req: SessionVariationAnalysisRequest):
             # Extract key from user ABC
             key_match = re.search(r'K:\s*([^\n]+)', req.user_abc)
             if key_match:
-                user_key = key_match.group(1).strip()
+                # Strip whitespace and unprintable characters
+                user_key = ''.join(c for c in key_match.group(1).strip() if c.isprintable()).strip()
 
         # Build prompt for AI analysis
         transpose_note = ""
@@ -637,9 +718,9 @@ After your narrative analysis, select UP TO 5 of the most interesting and pedago
 CRITICAL REQUIREMENTS - READ CAREFULLY:
 - Your examples MUST be literal copies of the settings shown above (Setting 1, Setting 2, Setting 3, etc.)
 - For the "abc" field:
-  * If user provided a key (e.g., K:Ador), transpose the ENTIRE setting to that key first
-  * Then copy the complete transposed ABC notation
-  * DO NOT modify anything else - just transpose key if needed
+  * If user provided a key (e.g., K:Dmaj), transpose the ENTIRE setting to that key
+  * Copy the complete transposed ABC notation (the octave will be verified programmatically)
+  * If no key was specified, just copy the setting exactly as shown
 - For the "title" field: Just use "Setting X" where X is the setting number you copied
 - For the "description" field: Explain what variation technique THIS ACTUAL SETTING demonstrates
 - The "setting_number" must match which setting you copied from the list above
@@ -648,7 +729,10 @@ CRITICAL REQUIREMENTS - READ CAREFULLY:
 - Use DOUBLE QUOTES for all strings, never single quotes
 - NO trailing commas after the last item in arrays or objects
 - Escape special characters in strings (use \\n for newlines in ABC notation)
-- Return ONLY valid JSON that can be parsed by JSON.parse(), nothing else before or after"""
+- Return ONLY valid JSON that can be parsed by JSON.parse(), nothing else before or after
+- DO NOT include any explanation, commentary, or text before the JSON object
+- DO NOT explain your transposition process - just do it silently and return the JSON
+- Your response must start with {{ and end with }}"""
 
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -662,33 +746,99 @@ CRITICAL REQUIREMENTS - READ CAREFULLY:
         )
 
         response_text = message.content[0].text.strip()
+        print(f"[SESSION] AI Response length: {len(response_text)}")
+        print(f"[SESSION] AI Response preview: {response_text[:200]}...")
+
+        # Check if response is empty
+        if not response_text:
+            print("[ERROR] Empty response from AI")
+            return {
+                'error': 'Empty response from AI',
+                'message': 'Failed to get AI response - the AI returned no content'
+            }
 
         # Clean up markdown if present
-        if response_text.startswith('```json'):
-            response_text = response_text.replace('```json', '').replace('```', '').strip()
-        elif response_text.startswith('```'):
-            response_text = response_text.replace('```', '').strip()
+        if '```json' in response_text:
+            # Extract JSON from markdown code block
+            start = response_text.find('```json') + 7
+            end = response_text.find('```', start)
+            response_text = response_text[start:end].strip()
+        elif '```' in response_text:
+            start = response_text.find('```') + 3
+            end = response_text.find('```', start)
+            response_text = response_text[start:end].strip()
+
+        # If there's text before the JSON, extract just the JSON object
+        if not response_text.startswith('{'):
+            # Find the first { and extract from there
+            json_start = response_text.find('{')
+            if json_start != -1:
+                response_text = response_text[json_start:]
+                print(f"[SESSION] Extracted JSON from position {json_start}")
+            else:
+                print("[ERROR] No JSON object found in response")
+                return {
+                    'error': 'No JSON object found in AI response',
+                    'message': 'The AI response did not contain valid JSON',
+                    'debug_response': response_text[:500]
+                }
 
         # Parse JSON response
         import json
         try:
+            # Try to parse as-is first
             analysis = json.loads(response_text)
         except json.JSONDecodeError as je:
-            print(f"[ERROR] JSON Parse Error: {je}")
-            print(f"[ERROR] Response text:\n{response_text[:500]}...")
-            return {
-                'error': f'Invalid JSON format from AI: {str(je)}',
-                'message': 'Failed to parse AI response'
-            }
+            # If it fails due to control characters, try to fix them
+            print(f"[SESSION] First parse failed, attempting to fix control characters...")
+            # Replace actual newlines in the narrative with escaped newlines
+            # This is a bit hacky but handles the common case of unescaped newlines in strings
+            # Find the narrative field and escape newlines within it
+            response_text_fixed = re.sub(
+                r'("narrative":\s*")([^"]*?)"',
+                lambda m: m.group(1) + m.group(2).replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t') + '"',
+                response_text,
+                flags=re.DOTALL
+            )
+            try:
+                analysis = json.loads(response_text_fixed)
+                print(f"[SESSION] Successfully parsed after fixing control characters")
+            except json.JSONDecodeError as je2:
+                print(f"[ERROR] JSON Parse Error after fix attempt: {je2}")
+                print(f"[ERROR] Response text (first 1000 chars):\n{response_text[:1000]}...")
+                return {
+                    'error': f'Invalid JSON format from AI: {str(je2)}',
+                    'message': 'Failed to parse AI response',
+                    'debug_response': response_text[:500]  # Include for debugging
+                }
+
+        # If user specified a key, verify octave register is correct
+        examples = analysis.get('examples', [])
+        if user_key and user_key != tune_data['key']:
+            print(f"[SESSION] Verifying octave register for transposed examples")
+            for i, example in enumerate(examples):
+                if 'abc' in example and 'setting_number' in example:
+                    setting_num = example['setting_number']
+                    if 1 <= setting_num <= len(settings):
+                        original_setting = settings[setting_num - 1]
+                        ai_transposed = example['abc']
+                        try:
+                            # Correct octave register if AI got it wrong
+                            corrected_abc = abc_transpose.correct_octave_register(original_setting, ai_transposed)
+                            example['abc'] = corrected_abc
+                            print(f"[SESSION] Verified octave for setting {setting_num}")
+                        except Exception as e:
+                            print(f"[SESSION] Failed to verify octave for setting {setting_num}: {e}")
+                            # Keep AI version if correction fails
 
         return {
             'title': tune_data['title'],
             'type': tune_data['type'],
             'key': tune_data['key'],
             'num_settings': len(settings),
-            'num_examples': len(analysis.get('examples', [])),
+            'num_examples': len(examples),
             'narrative': analysis.get('narrative', ''),
-            'examples': analysis.get('examples', [])
+            'examples': examples
         }
 
     except Exception as e:
@@ -1093,6 +1243,156 @@ async def harmonise_tune(req: HarmoniserRequest):
 async def health():
     """Health check endpoint"""
     return {"status": "ok"}
+
+
+# ============================================================================
+# BRENDA CASTLES VARIATIONS ENDPOINTS
+# ============================================================================
+
+class BrendaDetectRequest(BaseModel):
+    abc: str
+
+
+class BrendaGenerateRequest(BaseModel):
+    abc: str
+    repetition_info: dict
+
+
+class BrendaApplyRequest(BaseModel):
+    abc: str
+    repetition_info: dict
+    variations: List[dict]
+
+
+@app.get("/brenda-variations.html", response_class=HTMLResponse)
+async def brenda_variations_page():
+    """Serve Brenda Castles variations page"""
+    return FileResponse('brenda-variations.html')
+
+
+@app.post("/brenda/detect-repetition")
+async def brenda_detect_repetition(req: BrendaDetectRequest):
+    """Step 1: Detect repeated sections in the tune"""
+    try:
+        result = repetition_detector.detect_repetition(req.abc)
+        return result
+    except Exception as e:
+        return {'error': str(e)}
+
+
+@app.post("/brenda/generate-variations")
+async def brenda_generate_variations(req: BrendaGenerateRequest):
+    """Step 2: Generate variation ideas for repeated sections"""
+    try:
+        print(f"[BRENDA] generate-variations called")
+        print(f"[BRENDA] repetition_info: {req.repetition_info}")
+        variations = []
+
+        # Generate variation ideas for each repeated phrase (prefer 2-bar, fallback to single measures)
+        if req.repetition_info.get('repeated_phrases_2bar') and len(req.repetition_info['repeated_phrases_2bar']) > 0:
+            print(f"[BRENDA] Found {len(req.repetition_info['repeated_phrases_2bar'])} 2-bar phrases")
+            for phrase in req.repetition_info['repeated_phrases_2bar'][:3]:  # Top 3
+                print(f"[BRENDA] Generating variations for: {phrase['original_text']}")
+                # Generate all 8 variations (one per technique) for the entire phrase
+                all_variations = brenda_variations.generate_variation_ideas(
+                    phrase['original_text'],
+                    num_ideas=8  # Get all 8 techniques
+                )
+                print(f"[BRENDA] Generated {len(all_variations)} variations")
+
+                # Format as Option 1, Option 2, etc.
+                ideas = []
+                for idx, var in enumerate(all_variations):
+                    ideas.append({
+                        'abc': var['abc'],
+                        'description': var['description'],
+                        'technique_index': idx  # For re-rolling specific techniques
+                    })
+
+                # Format locations
+                locations = ', '.join([f"Bar {i+1}" for i in phrase['occurrences']])
+
+                variations.append({
+                    'original': phrase['original_text'],
+                    'locations': locations,
+                    'ideas': ideas
+                })
+        elif req.repetition_info.get('repeated_measures'):
+            # Fallback: use individual repeated measures
+            print(f"[BRENDA] No 2-bar phrases found, using repeated measures instead")
+            measures = repetition_detector.extract_measures_with_durations(req.abc)
+
+            # Get top 3 most repeated measures
+            measure_items = list(req.repetition_info['repeated_measures'].items())
+            measure_items.sort(key=lambda x: len(x[1]), reverse=True)  # Sort by occurrence count
+
+            for measure_content, indices in measure_items[:3]:
+                # Get the actual measure text (non-normalized)
+                original_text = measures[indices[0]]
+                print(f"[BRENDA] Generating variations for measure: {original_text}")
+
+                all_variations = brenda_variations.generate_variation_ideas(
+                    original_text,
+                    num_ideas=8
+                )
+                print(f"[BRENDA] Generated {len(all_variations)} variations")
+
+                ideas = []
+                for idx, var in enumerate(all_variations):
+                    ideas.append({
+                        'abc': var['abc'],
+                        'description': var['description'],
+                        'technique_index': idx
+                    })
+
+                locations = ', '.join([f"Bar {i+1}" for i in indices])
+
+                variations.append({
+                    'original': original_text,
+                    'locations': locations,
+                    'ideas': ideas
+                })
+        else:
+            print("[BRENDA] No repetition found - no 2-bar phrases or repeated measures")
+
+        return {'variations': variations}
+
+    except Exception as e:
+        return {'error': str(e)}
+
+
+@app.post("/brenda/apply-variations")
+async def brenda_apply_variations(req: BrendaApplyRequest):
+    """Step 3: Apply variations to the tune (with random selection)"""
+    try:
+        # Get repeated phrases from repetition info (prefer 2-bar, fallback to measures)
+        repeated_phrases = req.repetition_info.get('repeated_phrases_2bar', [])
+
+        # If no 2-bar phrases, construct phrase info from repeated_measures
+        if not repeated_phrases and req.repetition_info.get('repeated_measures'):
+            print("[BRENDA] No 2-bar phrases in apply, using repeated measures")
+            measures = repetition_detector.extract_measures_with_durations(req.abc)
+            repeated_phrases = []
+
+            for measure_content, indices in list(req.repetition_info['repeated_measures'].items())[:3]:
+                original_text = measures[indices[0]]
+                repeated_phrases.append({
+                    'original_text': original_text,
+                    'occurrences': indices,
+                    'length': 1
+                })
+
+        # Apply variations
+        result = brenda_variations.apply_variations_to_tune(
+            req.abc,
+            repeated_phrases,
+            req.variations
+        )
+
+        return result
+
+    except Exception as e:
+        return {'error': str(e)}
 
 
 if __name__ == "__main__":

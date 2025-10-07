@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brenda Castles Melodic Variations - Irish Tune Generator</title>
+    <link rel="stylesheet" href="shared/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/abcjs@6.4.3/dist/abcjs-basic-min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="section">
+            <h1>🎼 Brenda Castles Melodic Variations</h1>
+            <p>Identify repeated sections, generate variation ideas, and swap them into your tune</p>
+            <button class="back-button" onclick="window.location.href='index.html'">← Back to Index</button>
+        </div>
+
+        <div class="section" style="padding: 20px; background: #e3f2fd; border-left: 4px solid #1976d2; border-radius: 5px; margin-bottom: 20px;">
+            <h3 style="margin-top: 0; color: #1976d2;">📚 Brenda's 8 Variation Techniques</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 14px;">
+                <div>
+                    <strong>1. FILL LONG NOTES</strong> - Fill in long notes with neighbor/passing tones<br>
+                    <em>Example: D2 A → D E D, A G A</em>
+                </div>
+                <div>
+                    <strong>2. CONSOLIDATE TO LONG</strong> - Turn groups of short notes into sustained long notes<br>
+                    <em>Example: D E D A G A → D3 A3 (dotted quarters in 6/8)</em>
+                </div>
+                <div>
+                    <strong>3. CHORD SUBSTITUTION</strong> - Insert notes from the underlying chord<br>
+                    <em>Example: D2 A → D A D (using A from D chord: D-F#-A)</em>
+                </div>
+                <div>
+                    <strong>4. SLIDE APPROACH</strong> - Approach target note from below (like a slide/grace note)<br>
+                    <em>Example: D2 A → C D C A</em>
+                </div>
+                <div>
+                    <strong>5. OCTAVE DISPLACEMENT</strong> - Move individual notes up/down an octave<br>
+                    <em>Example: D D D → D' D D or D C B → D' C B</em>
+                </div>
+                <div>
+                    <strong>6. MOVE ALONG</strong> - Extend one note to absorb the next note's duration<br>
+                    <em>Example: D' B C A → D'2 C A (extend D', eliminate B)</em>
+                </div>
+                <div>
+                    <strong>7. DOUBLE/TRIPLE NOTES</strong> - Repeat notes where there were long notes<br>
+                    <em>Example: D2 → D D D</em>
+                </div>
+                <div>
+                    <strong>8. STRATEGIC LENGTHENING</strong> - Extend certain notes by removing others<br>
+                    <em>Example: A B C D E F → A2 C D E2 (extend A & E, remove B & F)</em>
+                </div>
+            </div>
+        </div>
+
+        <div class="section" style="padding: 15px; background: #f5f5f5; border-radius: 5px;">
+            <label for="tempo-slider" style="font-weight: bold; margin-right: 10px;">Tempo: <span id="tempo-value">120</span> BPM</label>
+            <input type="range" id="tempo-slider" min="40" max="200" value="120" step="5" style="width: 300px; vertical-align: middle;">
+        </div>
+
+        <div class="section">
+            <div class="input-group">
+                <label for="abc-input">ABC Notation:</label>
+                <textarea id="abc-input" placeholder="Paste ABC notation here...">X: 1
+T: Bill Harte's
+R: jig
+M: 6/8
+L: 1/8
+K: Dmix
+|:DED A2A|BAG ABA|DED A2A|BAG EGE|
+DED A2A|BAG ABc|d2B cBA|1 BAG EGE:|2 BAG E2D||
+|:d2B cBA|BAG ABc|d2B cBA|BAG E2D|
+dcB cBA|BAG ABc|ded c2A|1 BAG E2D:|2 BAG EGE||</textarea>
+            </div>
+
+            <div class="input-group" style="margin-top: 15px;">
+                <label for="target-phrases-input">Target Phrases (optional - leave blank to use all):</label>
+                <input type="text" id="target-phrases-input" placeholder="e.g. BAGABc|dBcBA, DEDAA|BAGABA" style="width: 100%; padding: 8px; font-family: monospace;">
+                <small style="color: #666;">Enter specific repeated phrases to generate variations for, separated by commas. Leave blank to use all detected 2-bar phrases.</small>
+            </div>
+
+            <button onclick="detectRepetition()">Step 1: Detect Repeated Sections</button>
+        </div>
+
+        <div id="repetition-output" class="section" style="display:none;">
+            <h2>Step 1: Repeated Sections Detected</h2>
+            <div id="repetition-summary" class="description"></div>
+            <div id="repetition-details" style="margin-top: 10px;"></div>
+
+            <div class="section" style="margin-top: 20px;">
+                <h3>Original Tune</h3>
+                <div id="original-notation" class="notation"></div>
+                <div style="margin-top: 10px;">
+                    <button class="play-button" onclick="playOriginal()">▶ Play Original</button>
+                    <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                </div>
+            </div>
+
+            <button onclick="generateVariations()" style="margin-top: 15px;">Step 2: Generate Variation Ideas</button>
+        </div>
+
+        <div id="loading-message" class="section" style="display:none; text-align: center; padding: 40px;">
+            <div style="font-size: 24px; margin-bottom: 10px;">⏳</div>
+            <div style="font-size: 18px; color: #666;">Detecting repeated sections...</div>
+        </div>
+
+        <div id="variations-output" class="section variation" style="display:none;">
+            <h2>Step 2: Variation Ideas Generated</h2>
+            <p class="description">Here are variation ideas for your repeated sections (Brenda Castles method)</p>
+
+            <div id="section-selector" style="margin-bottom: 20px; display:none;">
+                <label for="section-dropdown" style="font-weight: bold; margin-right: 10px;">Select Repeated Section:</label>
+                <select id="section-dropdown" style="padding: 8px; font-family: monospace; font-size: 14px;">
+                </select>
+            </div>
+
+            <div id="variations-container"></div>
+        </div>
+
+        <div id="practice-loop-output" class="section" style="display:none;">
+            <h2>Practice Loop Mode</h2>
+            <p class="description">Practice each variation individually - use the play buttons below to hear each one</p>
+
+            <div style="margin-bottom: 15px;">
+                <button class="stop-button" onclick="stopLoop()">⏹ Stop All</button>
+            </div>
+
+            <div id="loop-variations-display"></div>
+        </div>
+
+        <div id="applied-output" class="section" style="display:none;">
+            <h2>Step 3: Tune with Variations Applied</h2>
+            <div style="margin-bottom: 15px;">
+                <button class="play-button" onclick="playApplied()">▶ Play</button>
+                <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+            </div>
+
+            <div id="variation-mapping" class="description" style="margin-bottom: 15px; padding: 10px; background: #f0f8ff; border-left: 3px solid #4CAF50;"></div>
+
+            <div id="applied-notation" class="notation"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { playVariation, stopAllPlayback, renderAbc } from './shared/playback.js';
+
+        // State
+        let currentAbc = '';
+        let repetitionInfo = null;
+        let variationIdeas = [];
+        let appliedAbcBySec = {};  // Cache of applied ABC for each section
+        let appliedAbc = '';
+        let currentVariationMapping = {};
+        let currentTempo = 120;
+        let currentSectionIdx = 0;
+
+        // Tempo slider handler
+        document.getElementById('tempo-slider').addEventListener('input', function(e) {
+            currentTempo = parseInt(e.target.value);
+            document.getElementById('tempo-value').textContent = currentTempo;
+        });
+
+        // Helper: Annotate ABC with "REPEATED" markers
+        function annotateRepeatedBars(abc, repetitionInfo) {
+            // Extract measures like the backend does
+            const lines = abc.split('\n');
+            let musicStart = 0;
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].startsWith('K:')) {
+                    musicStart = i + 1;
+                    break;
+                }
+            }
+
+            const headers = lines.slice(0, musicStart).join('\n');
+            const musicBody = lines.slice(musicStart).join('\n');
+
+            // Extract clean measures
+            const measures = [];
+            for (const bar of musicBody.split('|')) {
+                const cleanBar = bar.replace(/[:|12\s]/g, '').trim();
+                if (cleanBar && !/^[\s:12]*$/.test(cleanBar)) {
+                    measures.push(bar.trim());
+                }
+            }
+
+            // Collect bar indices that are part of the 2-bar phrases we're targeting (uppercase REPEATED)
+            const targetPhraseBars = new Set();
+            if (repetitionInfo.repeated_phrases_2bar) {
+                repetitionInfo.repeated_phrases_2bar.forEach(phrase => {
+                    phrase.occurrences.forEach(startBar => {
+                        for (let i = 0; i < phrase.length; i++) {
+                            targetPhraseBars.add(startBar + i);
+                        }
+                    });
+                });
+            }
+
+            // Collect all repeated measures (lowercase repeated)
+            const allRepeatedBars = new Set();
+            if (repetitionInfo.repeated_measures) {
+                Object.values(repetitionInfo.repeated_measures).forEach(occurrences => {
+                    occurrences.forEach(barIdx => {
+                        allRepeatedBars.add(barIdx);
+                    });
+                });
+            }
+
+            // Annotate bars
+            const annotatedMeasures = measures.map((measure, idx) => {
+                if (targetPhraseBars.has(idx)) {
+                    // Part of the 2-bar phrase we're targeting - uppercase
+                    if (!measure.includes('"^REPEATED"')) {
+                        return `"^REPEATED"${measure}`;
+                    }
+                } else if (allRepeatedBars.has(idx)) {
+                    // Repeated measure but not part of target phrase - lowercase
+                    if (!measure.includes('"^repeated"')) {
+                        return `"^repeated"${measure}`;
+                    }
+                }
+                return measure;
+            });
+
+            // Reconstruct ABC
+            const musicLines = [];
+            let currentLine = [];
+            for (let i = 0; i < annotatedMeasures.length; i++) {
+                currentLine.push(annotatedMeasures[i]);
+                if ((i + 1) % 4 === 0 || i === annotatedMeasures.length - 1) {
+                    musicLines.push('|' + currentLine.join('|') + '|');
+                    currentLine = [];
+                }
+            }
+
+            return headers + '\n' + musicLines.join('\n');
+        }
+
+        // Step 1: Detect repeated sections
+        window.detectRepetition = async function() {
+            console.log('[BRENDA] Detecting repetition...');
+
+            currentAbc = document.getElementById('abc-input').value;
+
+            if (!currentAbc) {
+                alert('Please provide ABC notation');
+                return;
+            }
+
+            // Hide previous results and show loading
+            document.getElementById('repetition-output').style.display = 'none';
+            document.getElementById('variations-output').style.display = 'none';
+            document.getElementById('practice-loop-output').style.display = 'none';
+            document.getElementById('applied-output').style.display = 'none';
+            document.getElementById('loading-message').style.display = 'block';
+
+            try {
+                const response = await fetch('/brenda/detect-repetition', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ abc: currentAbc })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('[BRENDA] Repetition detected:', data);
+
+                repetitionInfo = data;
+
+                // Hide loading
+                document.getElementById('loading-message').style.display = 'none';
+
+                // Display repetition info
+                document.getElementById('repetition-summary').textContent = data.summary;
+
+                let detailsHtml = '<h3>Repeated Sections:</h3>';
+
+                if (data.repeated_phrases_2bar && data.repeated_phrases_2bar.length > 0) {
+                    detailsHtml += '<h4>2-bar phrases:</h4><ul>';
+                    data.repeated_phrases_2bar.forEach(phrase => {
+                        const bars = phrase.occurrences.map(i => `Bar ${i + 1}`).join(', ');
+                        detailsHtml += `<li><code>${phrase.original_text}</code> - appears at ${bars}</li>`;
+                    });
+                    detailsHtml += '</ul>';
+                }
+
+                document.getElementById('repetition-details').innerHTML = detailsHtml;
+
+                // Render original tune with REPEATED annotations
+                const annotatedAbc = annotateRepeatedBars(currentAbc, data);
+                renderAbc('original-notation', annotatedAbc);
+
+                document.getElementById('repetition-output').style.display = 'block';
+
+            } catch (error) {
+                console.error('[BRENDA ERROR]', error);
+                document.getElementById('loading-message').style.display = 'none';
+                alert('Error detecting repetition: ' + error.message);
+            }
+        };
+
+        // Step 2: Generate variation ideas
+        window.generateVariations = async function() {
+            console.log('[BRENDA] Generating variation ideas...');
+
+            // Get user-specified target phrases (if any)
+            const targetPhrasesInput = document.getElementById('target-phrases-input').value.trim();
+            let filteredRepetitionInfo = { ...repetitionInfo };
+
+            if (targetPhrasesInput) {
+                // Parse comma-separated phrases
+                const targetPhrases = targetPhrasesInput.split(',').map(p =>
+                    p.trim().replace(/\s+/g, '').replace(/\|/g, '').toLowerCase()
+                );
+
+                console.log('[BRENDA] Filtering to target phrases:', targetPhrases);
+
+                // Filter repeated_phrases_2bar to only include user-specified phrases
+                if (filteredRepetitionInfo.repeated_phrases_2bar) {
+                    filteredRepetitionInfo.repeated_phrases_2bar =
+                        filteredRepetitionInfo.repeated_phrases_2bar.filter(phrase => {
+                            const normalized = phrase.original_text
+                                .replace(/\s+/g, '')
+                                .replace(/\|/g, '')
+                                .toLowerCase();
+                            return targetPhrases.some(target => normalized.includes(target) || target.includes(normalized));
+                        });
+
+                    if (filteredRepetitionInfo.repeated_phrases_2bar.length === 0) {
+                        alert('None of the specified phrases were found in the detected repetitions. Please check your input or leave blank to use all.');
+                        return;
+                    }
+                }
+            }
+
+            try {
+                const response = await fetch('/brenda/generate-variations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        abc: currentAbc,
+                        repetition_info: filteredRepetitionInfo
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('[BRENDA] Variations generated:', data);
+
+                variationIdeas = data.variations;
+
+                // Show dropdown if multiple sections
+                if (data.variations.length > 1) {
+                    const dropdown = document.getElementById('section-dropdown');
+                    dropdown.innerHTML = '';
+                    data.variations.forEach((varGroup, idx) => {
+                        const option = document.createElement('option');
+                        option.value = idx;
+                        option.textContent = `${varGroup.original} (${varGroup.locations})`;
+                        dropdown.appendChild(option);
+                    });
+                    document.getElementById('section-selector').style.display = 'block';
+
+                    // Add change handler
+                    dropdown.onchange = () => {
+                        const idx = parseInt(dropdown.value);
+                        currentSectionIdx = idx;
+                        displaySelectedSection(idx);
+                        // Display pre-generated applied variations for this section
+                        displayAppliedSection(idx);
+                        // Restart practice loop with new section
+                        startPracticeLoop();
+                    };
+                } else {
+                    document.getElementById('section-selector').style.display = 'none';
+                }
+
+                // Display the first (or only) section
+                displaySelectedSection(0);
+                document.getElementById('variations-output').style.display = 'block';
+
+                // Pre-generate applied variations for ALL sections
+                await preGenerateAllAppliedVariations();
+
+                // Display first section's applied variations
+                currentSectionIdx = 0;
+                displayAppliedSection(0);
+                startPracticeLoop();
+
+            } catch (error) {
+                console.error('[BRENDA ERROR]', error);
+                alert('Error generating variations: ' + error.message);
+            }
+        };
+
+        // Pre-generate applied variations for ALL sections
+        async function preGenerateAllAppliedVariations() {
+            console.log('[BRENDA] Pre-generating applied variations for all sections...');
+
+            for (let i = 0; i < variationIdeas.length; i++) {
+                const varGroup = variationIdeas[i];
+
+                // Create a filtered repetition info for just this section
+                const filteredRep = {
+                    ...repetitionInfo,
+                    repeated_phrases_2bar: [{
+                        original_text: varGroup.original,
+                        occurrences: [], // We don't need this for rendering
+                        length: 2
+                    }]
+                };
+
+                try {
+                    const response = await fetch('/brenda/apply-variations', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            abc: currentAbc,
+                            repetition_info: filteredRep,
+                            variations: [varGroup]  // Only this section's variations
+                        })
+                    });
+
+                    const data = await response.json();
+                    appliedAbcBySec[i] = {
+                        abc: data.applied_abc,
+                        mapping: data.variation_mapping
+                    };
+                    console.log(`[BRENDA] Pre-generated section ${i}`);
+                } catch (error) {
+                    console.error(`[BRENDA] Failed to pre-generate section ${i}:`, error);
+                }
+            }
+        }
+
+        // Display pre-generated applied variations for a section
+        function displayAppliedSection(sectionIdx) {
+            if (!appliedAbcBySec[sectionIdx]) {
+                console.error('[BRENDA] No pre-generated variations for section', sectionIdx);
+                return;
+            }
+
+            const { abc, mapping } = appliedAbcBySec[sectionIdx];
+            appliedAbc = abc;
+            currentVariationMapping = mapping;
+
+            // Render notation
+            renderAbc('#applied-notation', appliedAbc);
+
+            // Update mapping display
+            updateMappingDisplay();
+
+            document.getElementById('applied-output').style.display = 'block';
+        }
+
+        // Step 3: Apply variations to tune
+        window.applyVariations = async function() {
+            console.log('[BRENDA] Applying variations...');
+
+            try {
+                const response = await fetch('/brenda/apply-variations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        abc: currentAbc,
+                        repetition_info: repetitionInfo,
+                        variations: variationIdeas
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('[BRENDA] Variations applied:', data);
+
+                appliedAbc = data.applied_abc;
+                currentVariationMapping = data.variation_mapping;
+
+                // Display editable mapping
+                let mappingHtml = '<strong>Variations Applied (edit and press Update to change):</strong><br>';
+                mappingHtml += '<div style="margin-top: 10px;" id="variation-mapping-list">';
+
+                if (Object.keys(data.variation_mapping).length === 0) {
+                    mappingHtml += '<em>No variations were applied</em><br>';
+                } else {
+                    Object.entries(data.variation_mapping).forEach(([location, variation]) => {
+                        const barNum = location.replace('Bar ', '');
+                        mappingHtml += `<div style="margin: 8px 0; display: flex; align-items: center; gap: 10px;">`;
+                        mappingHtml += `<label style="min-width: 80px; font-weight: bold;">${location}:</label>`;
+                        mappingHtml += `<input type="text" id="bar-${barNum}" value="${variation}" style="flex: 1; padding: 6px; font-family: monospace; border: 1px solid #ddd; border-radius: 3px;">`;
+                        mappingHtml += `</div>`;
+                    });
+                }
+
+                mappingHtml += '</div>';
+                mappingHtml += '<div style="margin-top: 10px; display: flex; gap: 10px;">';
+                mappingHtml += '<button onclick="updateVariations()" class="play-button">✓ Update Tune</button>';
+                mappingHtml += '<button onclick="addNewBarMapping()" class="play-button">➕ Add Bar</button>';
+                mappingHtml += '</div>';
+
+                document.getElementById('variation-mapping').innerHTML = mappingHtml;
+
+                // Render ABC
+                renderAbc('applied-notation', data.applied_abc);
+
+                document.getElementById('applied-output').style.display = 'block';
+
+            } catch (error) {
+                console.error('[BRENDA ERROR]', error);
+                alert('Error applying variations: ' + error.message);
+            }
+        };
+
+        // Re-roll variations
+        window.rerollVariations = async function() {
+            console.log('[BRENDA] Re-rolling variations...');
+            // Just call apply again - backend will pick different random variations
+            await applyVariations();
+        };
+
+        // Playback
+        window.playOriginal = function() {
+            const variationAbcs = { original: currentAbc };
+            playVariation('original', variationAbcs, currentTempo);
+        };
+
+        window.playApplied = function() {
+            const variationAbcs = { applied: appliedAbc };
+            playVariation('applied', variationAbcs, currentTempo);
+        };
+
+        window.stopPlayback = function() {
+            stopAllPlayback();
+        };
+
+        // =====================================================================
+        // PRACTICE LOOP MODE (Brenda's gradual progression method)
+        // =====================================================================
+
+        let loopState = {
+            currentPhrase: null,
+            currentVariations: []
+        };
+
+        window.startPracticeLoop = function() {
+            console.log('[BRENDA] Starting practice loop mode...');
+
+            if (!variationIdeas || variationIdeas.length === 0) {
+                alert('No variations available. Generate variations first.');
+                return;
+            }
+
+            // Use first repeated phrase
+            const firstGroup = variationIdeas[0];
+            loopState.currentPhrase = firstGroup.original;
+            loopState.currentVariations = firstGroup.ideas;
+
+            // Display
+            updateLoopDisplay();
+
+            document.getElementById('practice-loop-output').style.display = 'block';
+        };
+
+        function updateLoopDisplay() {
+            // Display all variations stacked vertically
+            const headers = currentAbc.split('\n').slice(0, 6).join('\n');
+            let html = '';
+
+            // Original (straight)
+            html += `<div style="margin-bottom: 15px; padding: 10px; background: white; border-left: 4px solid #4CAF50;">`;
+            html += `<strong style="color: #666;">Original:</strong> <code>${loopState.currentPhrase}</code>`;
+            html += `<div class="notation" id="loop-original"></div>`;
+            html += `<button class="play-button" onclick="playLoopVariation('original')" style="margin-top: 8px;">▶ Play</button>`;
+            html += `</div>`;
+
+            // Each variation
+            loopState.currentVariations.forEach((variation, idx) => {
+                html += `<div style="margin-bottom: 15px; padding: 10px; background: white; border-left: 4px solid #4CAF50;">`;
+                html += `<strong style="color: #666;">Variation ${idx + 1}:</strong> <code>${variation.abc}</code>`;
+                html += `<br><small style="color: #666;">${variation.description}</small>`;
+                html += `<div class="notation" id="loop-var-${idx}"></div>`;
+                html += `<button class="play-button" onclick="playLoopVariation(${idx})" style="margin-top: 8px;">▶ Play</button>`;
+                html += `</div>`;
+            });
+
+            document.getElementById('loop-variations-display').innerHTML = html;
+
+            // Render all notations (no repeats - play once through)
+            // Ensure proper bar structure: |bar1|bar2| not ||bar1|bar2||
+            renderAbc('loop-original', `${headers}\n|${loopState.currentPhrase}|`);
+
+            loopState.currentVariations.forEach((variation, idx) => {
+                renderAbc(`loop-var-${idx}`, `${headers}\n|${variation.abc}|`);
+            });
+        }
+
+        window.stopLoop = function() {
+            stopAllPlayback();
+        };
+
+        window.playLoopVariation = function(variationIndex) {
+            // Play a specific variation from the practice loop (no repeats - once through)
+            const headers = currentAbc.split('\n').slice(0, 6).join('\n');
+            let abcToPlay;
+
+            if (variationIndex === 'original') {
+                // Play original phrase
+                abcToPlay = `${headers}\n|${loopState.currentPhrase}|`;
+            } else {
+                // Play specific variation
+                const variation = loopState.currentVariations[variationIndex];
+                if (variation) {
+                    abcToPlay = `${headers}\n|${variation.abc}|`;
+                } else {
+                    console.error('[BRENDA] Invalid variation index:', variationIndex);
+                    return;
+                }
+            }
+
+            console.log('[BRENDA] Playing loop variation:', variationIndex, abcToPlay);
+            const variationAbcs = { [variationIndex]: abcToPlay };
+            playVariation(variationIndex, variationAbcs, currentTempo);
+        };
+
+        // Display variations for a specific section
+        function displaySelectedSection(sectionIdx) {
+            if (!variationIdeas || !variationIdeas[sectionIdx]) return;
+
+            const varGroup = variationIdeas[sectionIdx];
+            let html = '';
+            html += `<div style="margin-bottom: 25px; padding: 15px; background: #f9f9f9; border-radius: 5px;">`;
+            html += `<div style="display: flex; justify-content: space-between; align-items: center;">`;
+            html += `<div>`;
+            html += `<h4 style="margin: 0;">Variations for: <code>${varGroup.original}</code></h4>`;
+            html += `<p style="color: #666; margin: 5px 0 0 0;">Found at: ${varGroup.locations}</p>`;
+            html += `</div>`;
+            html += `<button onclick="editSectionPhrase(${sectionIdx})" class="play-button" style="white-space: nowrap;">✏️ Edit Phrase</button>`;
+            html += `</div>`;
+            html += `<div style="margin-top: 10px;">`;
+
+            varGroup.ideas.forEach((idea, ideaIdx) => {
+                html += `<div style="margin: 8px 0; padding: 10px; background: white; border-left: 3px solid #4CAF50; display: flex; justify-content: space-between; align-items: center;">`;
+                html += `<div style="flex: 1;">`;
+                html += `<strong>Option ${ideaIdx + 1}:</strong> <code>${idea.abc}</code>`;
+                if (idea.description) {
+                    html += `<br><small style="color: #666;">${idea.description}</small>`;
+                }
+                html += `</div>`;
+                html += `<button onclick="rerollVariation(${sectionIdx}, ${ideaIdx})" class="play-button" style="margin-left: 10px; white-space: nowrap;">🔄 Reroll</button>`;
+                html += `</div>`;
+            });
+
+            html += `</div></div>`;
+            document.getElementById('variations-container').innerHTML = html;
+        }
+
+        // Reroll a specific variation
+        window.rerollVariation = async function(sectionIdx, variationIdx) {
+            console.log('[BRENDA] Rerolling variation', sectionIdx, variationIdx);
+
+            const varGroup = variationIdeas[sectionIdx];
+            if (!varGroup) return;
+
+            try {
+                // Generate a new variation using the same technique
+                const response = await fetch('/brenda/generate-variations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        abc: currentAbc,
+                        repetition_info: {
+                            repeated_phrases_2bar: [{
+                                original_text: varGroup.original,
+                                occurrences: [],
+                                length: 2
+                            }]
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                if (data.variations && data.variations[0] && data.variations[0].ideas[variationIdx]) {
+                    // Update the variation
+                    variationIdeas[sectionIdx].ideas[variationIdx] = data.variations[0].ideas[variationIdx];
+                    // Refresh display
+                    displaySelectedSection(sectionIdx);
+                }
+
+            } catch (error) {
+                console.error('[BRENDA ERROR]', error);
+                alert('Error rerolling variation: ' + error.message);
+            }
+        };
+
+        // Update variations based on user edits
+        window.updateVariations = function() {
+            console.log('[BRENDA] Updating variations from user input...');
+
+            // Get all the updated values from inputs
+            const updatedMapping = {};
+            Object.keys(currentVariationMapping).forEach(location => {
+                const barNum = location.replace('Bar ', '');
+                const input = document.getElementById(`bar-${barNum}`);
+                if (input) {
+                    updatedMapping[location] = input.value.trim();
+                }
+            });
+
+            console.log('[BRENDA] Updated mapping:', updatedMapping);
+
+            // Rebuild the ABC with user's custom variations
+            rebuildTuneWithMapping(updatedMapping);
+        };
+
+        // Rebuild the tune ABC with custom variation mapping
+        function rebuildTuneWithMapping(mapping) {
+            // Parse the original ABC
+            const lines = currentAbc.split('\n');
+            let musicStart = 0;
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].startsWith('K:')) {
+                    musicStart = i + 1;
+                    break;
+                }
+            }
+            const headers = lines.slice(0, musicStart).join('\n');
+            const musicBody = lines.slice(musicStart).join('\n');
+
+            // Extract measures with durations (from repetition_detector logic)
+            const measures = [];
+            for (const bar of musicBody.split('|')) {
+                let cleanBar = bar.trim();
+                cleanBar = cleanBar.replace(/^[:\d]+/, '').replace(/:+$/, '').replace(/ /g, '');
+                if (cleanBar) {
+                    measures.push(cleanBar);
+                }
+            }
+
+            // Apply the mapping
+            Object.entries(mapping).forEach(([location, variation]) => {
+                const barNum = parseInt(location.replace('Bar ', '')) - 1; // 0-indexed
+                if (barNum >= 0 && barNum < measures.length) {
+                    measures[barNum] = variation;
+                }
+            });
+
+            // Rebuild ABC with annotations
+            const modifiedBars = new Set(
+                Object.keys(mapping).map(loc => parseInt(loc.replace('Bar ', '')) - 1)
+            );
+
+            const musicLines = [];
+            let currentLine = [];
+            let barCount = 0;
+
+            for (let i = 0; i < measures.length; i++) {
+                let measureAnnotated = measures[i];
+                if (modifiedBars.has(i)) {
+                    measureAnnotated = `"^VARIED"${measures[i]}`;
+                }
+
+                currentLine.push(measureAnnotated);
+                barCount++;
+
+                if (barCount % 4 === 0 || i === measures.length - 1) {
+                    musicLines.push('|' + currentLine.join('|') + '|');
+                    currentLine = [];
+                }
+            }
+
+            appliedAbc = headers + '\n' + musicLines.join('\n');
+
+            // Re-render
+            renderAbc('applied-notation', appliedAbc);
+            console.log('[BRENDA] Tune updated with custom variations');
+        }
+
+        // Add a new bar mapping
+        window.addNewBarMapping = function() {
+            const barNumber = prompt('Enter bar number to add variation to:');
+            if (!barNumber || isNaN(barNumber)) {
+                alert('Please enter a valid bar number');
+                return;
+            }
+
+            const abc = prompt('Enter the ABC notation for this bar:');
+            if (!abc) return;
+
+            // Add to mapping
+            const location = `Bar ${barNumber}`;
+            currentVariationMapping[location] = abc.trim();
+
+            // Rebuild the tune
+            rebuildTuneWithMapping(currentVariationMapping);
+
+            // Update the display to show the new mapping
+            const mappingList = document.getElementById('variation-mapping-list');
+            const newRow = document.createElement('div');
+            newRow.style.cssText = 'margin: 8px 0; display: flex; align-items: center; gap: 10px;';
+            newRow.innerHTML = `
+                <label style="min-width: 80px; font-weight: bold;">${location}:</label>
+                <input type="text" id="bar-${barNumber}" value="${abc.trim()}" style="flex: 1; padding: 6px; font-family: monospace; border: 1px solid #ddd; border-radius: 3px;">
+            `;
+            mappingList.appendChild(newRow);
+
+            console.log('[BRENDA] Added new bar mapping:', location, abc);
+        };
+
+        // Edit the phrase for a section
+        window.editSectionPhrase = function(sectionIdx) {
+            if (!variationIdeas || !variationIdeas[sectionIdx]) return;
+
+            const varGroup = variationIdeas[sectionIdx];
+            const newPhrase = prompt('Edit the phrase (ABC notation):', varGroup.original);
+
+            if (!newPhrase || newPhrase === varGroup.original) return;
+
+            // Update the original phrase
+            variationIdeas[sectionIdx].original = newPhrase.trim();
+
+            // Regenerate variations for this new phrase
+            console.log('[BRENDA] Regenerating variations for edited phrase:', newPhrase);
+
+            fetch('/brenda/generate-variations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    abc: currentAbc,
+                    repetition_info: {
+                        repeated_phrases_2bar: [{
+                            original_text: newPhrase.trim(),
+                            occurrences: [],
+                            length: 2
+                        }]
+                    }
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.variations && data.variations[0]) {
+                    // Update the variation ideas
+                    variationIdeas[sectionIdx].ideas = data.variations[0].ideas;
+                    variationIdeas[sectionIdx].original = newPhrase.trim();
+
+                    // Refresh display
+                    displaySelectedSection(sectionIdx);
+
+                    // Update dropdown if it exists
+                    const dropdown = document.getElementById('section-dropdown');
+                    if (dropdown && dropdown.options[sectionIdx]) {
+                        dropdown.options[sectionIdx].textContent = `${newPhrase.trim()} (${varGroup.locations})`;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('[BRENDA ERROR]', error);
+                alert('Error regenerating variations: ' + error.message);
+            });
+        };
+    </script>
+</body>
+</html>

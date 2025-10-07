@@ -33,6 +33,7 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
             <div class="input-group">
                 <label for="melodic-select">Melodic Variation Type:</label>
                 <select id="melodic-select">
+                    <option value="all_variations">All of the Above</option>
                     <optgroup label="Traditional">
                         <option value="neighbor">Neighbor tone substitution</option>
                         <option value="phrase_ending">Phrase ending variation</option>
@@ -60,9 +61,17 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
             </div>
 
             <div class="input-group">
+                <label style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="target-repetition" checked>
+                    <span>Target Repetition (auto-identify repeated measures/phrases)</span>
+                </label>
+                <small style="color: #666; display: block; margin-top: 5px;">When enabled, variations will be applied to repeated sections. Disable to use random locations or specify a lick below.</small>
+            </div>
+
+            <div class="input-group">
                 <label for="lick-input">Target Specific Lick (optional):</label>
-                <input type="text" id="lick-input" placeholder="e.g., eAABcd (leave empty for 2-5 random locations)">
-                <small style="color: #666;">If specified, only this pattern will be varied. Otherwise, variations will be applied to 2-5 different spots automatically.</small>
+                <input type="text" id="lick-input" placeholder="e.g., eAABcd (leave empty to use target repetition or random locations)">
+                <small style="color: #666;">If specified, only this pattern will be varied.</small>
             </div>
 
             <button onclick="generateVariation()">Generate Variation</button>
@@ -95,6 +104,10 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
             <div id="variation-output" class="section variation">
                 <h2>Melodic Variation</h2>
                 <div id="variation-desc" class="description"></div>
+                <div id="repetition-info" class="description" style="margin-top: 10px; padding: 10px; background: #f0f8ff; border-left: 3px solid #4CAF50; display: none;">
+                    <strong>Repeated Sections Identified:</strong>
+                    <div id="repetition-details"></div>
+                </div>
                 <div id="variations-container"></div>
             </div>
         </div>
@@ -131,9 +144,16 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
             const abc = document.getElementById('abc-input').value;
             const melodicType = document.getElementById('melodic-select').value;
             const lick = document.getElementById('lick-input').value.trim() || null;
+            const targetRepetition = document.getElementById('target-repetition').checked;
 
             if (!abc) {
                 showError('Please provide ABC notation');
+                return;
+            }
+
+            // Validation for "All of the Above"
+            if (melodicType === 'all_variations' && !targetRepetition && !lick) {
+                alert('Please check the Target Repetition box or add a lick');
                 return;
             }
 
@@ -148,7 +168,7 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
             document.getElementById('variations-container').innerHTML = '';
 
             try {
-                const data = await generateMelodicVariation(abc, melodicType, lick);
+                const data = await generateMelodicVariation(abc, melodicType, lick, targetRepetition);
 
                 console.log('[MELODY] Response:', data);
 
@@ -171,18 +191,61 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                 // Display variation description
                 document.getElementById('variation-desc').textContent = data.melodic_desc;
 
-                // Render each changed bar as a separate snippet
-                if (data.melodic_changed_bars && data.melodic_changed_bars.length > 0) {
+                // Display repetition info if available
+                if (data.repetition_info && data.repetition_info.has_repetition) {
+                    const repInfo = document.getElementById('repetition-info');
+                    const repDetails = document.getElementById('repetition-details');
+                    repDetails.textContent = data.repetition_info.summary;
+                    repInfo.style.display = 'block';
+                } else {
+                    document.getElementById('repetition-info').style.display = 'none';
+                }
+
+                // Check if "All of the Above" was used
+                if (data.melodic_all_variations && data.melodic_all_variations.length > 0) {
+                    // Display all variations
+                    let html = '<div style="margin-top: 20px;"><h3>All Variations Applied</h3></div>';
+
+                    data.melodic_all_variations.forEach((variation, idx) => {
+                        variationAbcs[`all-var-${idx}`] = variation.abc;
+
+                        html += `
+                            <div class="section variation" style="margin-top: 20px;">
+                                <h4>${variation.type.replace(/_/g, ' ')}</h4>
+                                <p class="description">${variation.description}</p>
+                                <div id="all-var-${idx}" class="notation"></div>
+                                <div style="margin-top: 10px;">
+                                    <button class="play-button" onclick="playAllVariation(${idx})">▶ Play</button>
+                                    <button class="stop-button" onclick="stopPlayback()">⏹ Stop</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    document.getElementById('variations-container').innerHTML = html;
+
+                    // Render all variations
+                    data.melodic_all_variations.forEach((variation, idx) => {
+                        renderAbc(`all-var-${idx}`, variation.abc);
+                    });
+
+                } else if (data.melodic_changed_bars && data.melodic_changed_bars.length > 0) {
                     console.log('[MELODY] Rendering changed bars as separate snippets');
 
                     // Group bars by their modified content (same modification = one variation)
                     const groupedBars = {};
                     data.melodic_changed_bars.forEach(bar => {
-                        const key = bar.modified;
+                        // Normalize by removing leading/trailing colons and whitespace for grouping
+                        const normalizedModified = bar.modified.replace(/^:\s*|\s*:$/g, '').trim();
+                        const normalizedOriginal = bar.original.replace(/^:\s*|\s*:$/g, '').trim();
+
+                        const key = normalizedModified;
                         if (!groupedBars[key]) {
                             groupedBars[key] = {
-                                modified: bar.modified,
+                                modified: bar.modified,  // Keep original format for display
                                 original: bar.original,
+                                normalizedModified: normalizedModified,
+                                normalizedOriginal: normalizedOriginal,
                                 bars: []
                             };
                         }
@@ -205,7 +268,7 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                         html += `
                             <div class="section variation" style="margin-top: 20px;">
                                 <h4>Variation ${variationIndex + 1}</h4>
-                                <p class="description">${barList}: ${group.original} → ${group.modified}</p>
+                                <p class="description">${barList}: ${group.normalizedOriginal} → ${group.normalizedModified}</p>
                                 <div id="snippet-${variationIndex}" class="notation"></div>
                                 <div id="full-tune-${variationIndex}" class="notation" style="margin-top: 15px;"></div>
                                 <div style="margin-top: 10px;">
@@ -365,6 +428,11 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
         window.playFullTune = function(index) {
             const tempo = parseInt(document.getElementById('tempo-value').value);
             playVariation(`full-tune-${index}`, variationAbcs, tempo);
+        };
+
+        window.playAllVariation = function(index) {
+            const tempo = parseInt(document.getElementById('tempo-value').value);
+            playVariation(`all-var-${index}`, variationAbcs, tempo);
         };
 
         window.stopPlayback = function() {

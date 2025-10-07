@@ -33,6 +33,7 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
             <div class="input-group">
                 <label for="transformation-select">Transformation Type:</label>
                 <select id="transformation-select">
+                    <option value="all_variations">All of the Above</option>
                     <optgroup label="Melodic Substitution">
                         <option value="neighbor_tone_substitution">Neighbor Tone Substitution</option>
                         <option value="intervallic_expansion">Intervallic Expansion</option>
@@ -66,6 +67,20 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                 </select>
             </div>
 
+            <div class="input-group">
+                <label style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="target-repetition" checked>
+                    <span>Target Repetition (auto-identify repeated measures/phrases)</span>
+                </label>
+                <small style="color: #666; display: block; margin-top: 5px;">When enabled, variations will be applied to repeated sections. Disable to use random locations or specify a lick below.</small>
+            </div>
+
+            <div class="input-group">
+                <label for="lick-input">Target Specific Lick (optional):</label>
+                <input type="text" id="lick-input" placeholder="e.g., eAABcd (leave empty to use target repetition or random locations)">
+                <small style="color: #666;">If specified, only this pattern will be varied.</small>
+            </div>
+
             <button onclick="generateTransformation()">Generate Transformation</button>
             <button onclick="feelingLucky()" style="background-color: #ff9800;">🍀 Feeling Lucky (5 Random)</button>
         </div>
@@ -97,6 +112,10 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                 <h2>Transformed Melody</h2>
                 <div id="transformation-desc" class="description"></div>
                 <div id="transformation-explanation" class="description" style="margin-top: 10px; font-style: italic;"></div>
+                <div id="repetition-info" class="description" style="margin-top: 10px; padding: 10px; background: #f0f8ff; border-left: 3px solid #4CAF50; display: none;">
+                    <strong>Repeated Sections Identified:</strong>
+                    <div id="repetition-details"></div>
+                </div>
                 <div id="transformations-container"></div>
             </div>
         </div>
@@ -131,9 +150,17 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
 
             const abc = document.getElementById('abc-input').value;
             const transformationType = document.getElementById('transformation-select').value;
+            const lick = document.getElementById('lick-input').value.trim() || null;
+            const targetRepetition = document.getElementById('target-repetition').checked;
 
             if (!abc) {
                 showError('Please provide ABC notation');
+                return;
+            }
+
+            // Validation for "All of the Above"
+            if (transformationType === 'all_variations' && !targetRepetition && !lick) {
+                alert('Please check the Target Repetition box or add a lick');
                 return;
             }
 
@@ -152,7 +179,9 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         abc: abc,
-                        transformation: transformationType
+                        transformation: transformationType,
+                        lick: lick,
+                        target_repetition: targetRepetition
                     })
                 });
 
@@ -188,6 +217,16 @@ eaa efg|agf gfd|edB cBA|BAG ABd:|</textarea>
                     `${transformationType.replace(/_/g, ' ')}: ${data.description}`;
                 document.getElementById('transformation-explanation').textContent =
                     data.explanation || '';
+
+                // Display repetition info if available
+                if (data.repetition_info && data.repetition_info.has_repetition) {
+                    const repInfo = document.getElementById('repetition-info');
+                    const repDetails = document.getElementById('repetition-details');
+                    repDetails.textContent = data.repetition_info.summary;
+                    repInfo.style.display = 'block';
+                } else {
+                    document.getElementById('repetition-info').style.display = 'none';
+                }
 
                 // Render changed bars as separate snippets (like melody.html)
                 if (data.changed_bars && data.changed_bars.length > 0) {

@@ -8,11 +8,13 @@
  * @param {string} abc - ABC notation
  * @param {string} melodicType - Type of melodic variation
  * @param {string} lick - Optional target lick pattern
+ * @param {boolean} targetRepetition - Whether to auto-detect repeated sections
  */
-export async function generateMelodicVariation(abc, melodicType, lick = null) {
+export async function generateMelodicVariation(abc, melodicType, lick = null, targetRepetition = false) {
     console.log('[API] Generating melodic variation...');
     console.log(`  - melodic_type: ${melodicType}`);
     console.log(`  - lick: ${lick || 'none'}`);
+    console.log(`  - target_repetition: ${targetRepetition}`);
 
     const response = await fetch('/generate', {
         method: 'POST',
@@ -22,6 +24,7 @@ export async function generateMelodicVariation(abc, melodicType, lick = null) {
             harmony_type: 'none',
             melodic_type: melodicType,
             lick: lick,
+            target_repetition: targetRepetition,
             validate_anglo: false
         })
     });
