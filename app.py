@@ -9,12 +9,13 @@ from typing import Optional, List
 import random
 import os
 import re
+import json
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
 
-from core import harmony, melodic, session_scraper, melodic_transformations, harmony_transformations, ornamentation_transformations, reharmonization, harmoniser, repetition_detector, brenda_variations, abc_transpose
+from core import harmony, melodic, session_scraper, melodic_transformations, harmony_transformations, ornamentation_transformations, reharmonization, harmoniser, repetition_detector, brenda_variations, abc_transpose, skeletal_analysis
 from core.melodic import _diff_abc_bars
 
 app = FastAPI(title="Irish Tune Variation Generator")
@@ -398,7 +399,7 @@ Return only the modified ABC notation."""
 Important: Return ONLY valid ABC notation, nothing else. Keep the same headers (X:, T:, M:, L:, R:, K:) and only modify the musical content."""
 
             message = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=2000,
                 messages=[{
                     "role": "user",
@@ -462,6 +463,87 @@ async def transform_melody(req: MelodyTransformRequest):
             'message': 'Set ANTHROPIC_API_KEY environment variable and install anthropic package'
         }
 
+    # Special handling for "all_variations" - apply all transformations
+    if req.transformation == 'all_variations':
+        try:
+            # Handle target repetition
+            repetition_info = None
+            lick_to_use = req.lick
+
+            if req.target_repetition and not req.lick:
+                repetition_info = repetition_detector.detect_repetition(req.abc)
+                if repetition_info['has_repetition']:
+                    target_licks = repetition_detector.get_target_licks(req.abc)
+                    if target_licks:
+                        lick_to_use = target_licks[0]
+
+            # Apply all transformations
+            all_variations = []
+            client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+            for transform_name, transform_prompt in melodic_transformations.TRANSFORMATIONS.items():
+                lick_instruction = ""
+                if lick_to_use:
+                    lick_instruction = f"\nIMPORTANT: Apply this transformation ONLY to this specific pattern: {lick_to_use}\nDo NOT modify other parts of the tune."
+
+                prompt = f"""Given this ABC notation for an Irish tune:
+
+{req.abc}
+
+{transform_prompt}{lick_instruction}
+
+Return your response in this exact JSON format:
+{{
+  "abc": "the transformed ABC notation here",
+  "explanation": "2-3 sentence explanation of what specific musical changes you made"
+}}
+
+IMPORTANT: Return ONLY valid JSON, nothing else."""
+
+                message = client.messages.create(
+                    model="claude-sonnet-4-5-20250929",
+                    max_tokens=2000,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+
+                response_text = message.content[0].text.strip()
+                if response_text.startswith('```json'):
+                    response_text = response_text.replace('```json', '').replace('```', '').strip()
+                elif response_text.startswith('```'):
+                    response_text = response_text.replace('```', '').strip()
+
+                import json
+                result = json.loads(response_text)
+
+                description = transform_prompt.split('\n')[1].replace('Transform this ABC notation by ', '').replace(':', '')
+                changed_bars = _diff_abc_bars(req.abc, result.get('abc', ''), 5)
+
+                all_variations.append({
+                    'abc': result.get('abc', ''),
+                    'type': transform_name,
+                    'description': description,
+                    'explanation': result.get('explanation', ''),
+                    'changed_bars': changed_bars
+                })
+
+            response = {
+                'original': req.abc,
+                'all_variations': all_variations,
+                'transformation': 'all_variations',
+                'description': f'All {len(all_variations)} melodic transformations'
+            }
+
+            if repetition_info:
+                response['repetition_info'] = repetition_info
+
+            return response
+
+        except Exception as e:
+            return {
+                'error': str(e),
+                'message': 'Failed to generate all variations'
+            }
+
     if req.transformation not in melodic_transformations.TRANSFORMATIONS:
         return {
             'error': 'Invalid transformation',
@@ -499,7 +581,7 @@ Return your response in this exact JSON format:
 IMPORTANT: Return ONLY valid JSON, nothing else."""
 
         message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-4-5-20250929",
             max_tokens=2000,
             messages=[{
                 "role": "user",
@@ -583,7 +665,7 @@ Return your response in this exact JSON format:
 IMPORTANT: Return ONLY valid JSON, nothing else."""
 
             message = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=2000,
                 messages=[{
                     "role": "user",
@@ -704,13 +786,15 @@ After your narrative analysis, select UP TO 5 of the most interesting and pedago
       "title": "Setting 1",
       "description": "Brief description of what variation technique this setting demonstrates",
       "abc": "COPY THE ENTIRE SETTING 1 ABC VERBATIM - every single character exactly as shown above",
-      "setting_number": 1
+      "setting_number": 1,
+      "interesting_bars": [1, 3]
     }},
     {{
       "title": "Setting 3",
       "description": "Brief description of what variation technique this setting demonstrates",
       "abc": "COPY THE ENTIRE SETTING 3 ABC VERBATIM - every single character exactly as shown above",
-      "setting_number": 3
+      "setting_number": 3,
+      "interesting_bars": [2, 5]
     }}
   ]
 }}
@@ -723,6 +807,7 @@ CRITICAL REQUIREMENTS - READ CAREFULLY:
   * If no key was specified, just copy the setting exactly as shown
 - For the "title" field: Just use "Setting X" where X is the setting number you copied
 - For the "description" field: Explain what variation technique THIS ACTUAL SETTING demonstrates
+- For the "interesting_bars" field: List the bar numbers (1-indexed) that contain the most interesting variations worth highlighting. Include 2-4 bar numbers.
 - The "setting_number" must match which setting you copied from the list above
 - DO NOT create hybrid examples, DO NOT make up new variations
 - Select UP TO 5 settings that best illustrate different variation techniques (only use fewer if the variations are too similar to warrant 5 examples)
@@ -737,7 +822,7 @@ CRITICAL REQUIREMENTS - READ CAREFULLY:
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
         message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-4-5-20250929",
             max_tokens=3000,
             messages=[{
                 "role": "user",
@@ -882,7 +967,7 @@ Return your response in this exact JSON format:
 IMPORTANT: Return ONLY valid JSON, nothing else."""
 
         message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-4-5-20250929",
             max_tokens=2000,
             messages=[{
                 "role": "user",
@@ -961,7 +1046,7 @@ Return your response in this exact JSON format:
 IMPORTANT: Return ONLY valid JSON, nothing else."""
 
             message = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=2000,
                 messages=[{
                     "role": "user",
@@ -1042,7 +1127,7 @@ Return your response in this exact JSON format:
 IMPORTANT: Return ONLY valid JSON, nothing else."""
 
         message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-4-5-20250929",
             max_tokens=2000,
             messages=[{
                 "role": "user",
@@ -1121,7 +1206,7 @@ Return your response in this exact JSON format:
 IMPORTANT: Return ONLY valid JSON, nothing else."""
 
             message = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=2000,
                 messages=[{
                     "role": "user",
@@ -1264,10 +1349,34 @@ class BrendaApplyRequest(BaseModel):
     variations: List[dict]
 
 
+class SkeletalAnalysisRequest(BaseModel):
+    abc: str
+    session_url: Optional[str] = None
+    complexity_level: int = 1  # 1 (simple), 2 (medium), 3 (complex)
+    mir_weights: Optional[dict] = None  # Optional MIR feature weights
+
+
+class SimpleAnalysisRequest(BaseModel):
+    abc: str
+    session_url: Optional[str] = None
+
+
 @app.get("/brenda-variations.html", response_class=HTMLResponse)
 async def brenda_variations_page():
     """Serve Brenda Castles variations page"""
     return FileResponse('brenda-variations.html')
+
+
+@app.get("/skeletal.html", response_class=HTMLResponse)
+async def skeletal_page():
+    """Serve skeletal note analysis page"""
+    return FileResponse('skeletal.html')
+
+
+@app.get("/simple.html", response_class=HTMLResponse)
+async def simple_page():
+    """Serve simple skeletal analysis page"""
+    return FileResponse('simple.html')
 
 
 @app.post("/brenda/detect-repetition")
@@ -1395,6 +1504,440 @@ async def brenda_apply_variations(req: BrendaApplyRequest):
         return {'error': str(e)}
 
 
+@app.post("/analyze-skeletal")
+async def analyze_skeletal(req: SkeletalAnalysisRequest):
+    """
+    Analyze skeletal (structural) vs. ornamental notes
+    Combines AI analysis of Session variations with algorithmic feature extraction
+    """
+    try:
+        print(f"[SKELETAL] Starting analysis")
+        print(f"[SKELETAL] Session URL: {req.session_url or 'None (algorithmic only)'}")
+
+        # Feature B: Algorithmic Analysis with music21 - compute all 3 complexity levels
+        print("[SKELETAL] Extracting music21 features for all complexity levels...")
+        algo_features_levels = {}
+        algo_csvs = {}
+
+        for level in [1, 2, 3]:
+            features = skeletal_analysis.extract_music21_features(req.abc, complexity_level=level)
+            features = skeletal_analysis.normalize_importance_scores(features)
+            algo_features_levels[level] = features
+            algo_csvs[level] = skeletal_analysis.features_to_csv(features)
+
+        # Use the requested level as the primary one (default to level 1)
+        algo_features = algo_features_levels.get(req.complexity_level, algo_features_levels[1])
+        algo_csv = algo_csvs.get(req.complexity_level, algo_csvs[1])
+
+        # Generate algorithmic skeleton (50% threshold)
+        algo_skeletal_abc = skeletal_analysis.generate_skeletal_abc(req.abc, algo_features, threshold=0.5)
+
+        # Feature D: MIR Analysis - compute all 3 complexity levels
+        print("[SKELETAL] Extracting MIR features for all complexity levels...")
+        mir_features_levels = {}
+        mir_csvs = {}
+
+        # Map complexity levels to weight configurations
+        level_weights = {
+            1: {  # Simple: basic features only
+                'duration': 1.0, 'metric': 1.0, 'harmonic': 1.0,
+                'contour': 0.0, 'scalar': 0.0, 'intervallic': 0.0,
+                'phrase': 0.0, 'agogic': 0.0
+            },
+            2: {  # Medium: add melodic features
+                'duration': 1.0, 'metric': 1.0, 'harmonic': 1.0,
+                'contour': 1.0, 'scalar': 1.0, 'intervallic': 1.0,
+                'phrase': 0.0, 'agogic': 0.0
+            },
+            3: {  # Complex: all features
+                'duration': 1.0, 'metric': 1.0, 'harmonic': 1.0,
+                'contour': 1.0, 'scalar': 1.0, 'intervallic': 1.0,
+                'phrase': 1.0, 'agogic': 1.0
+            }
+        }
+
+        for level in [1, 2, 3]:
+            weights = req.mir_weights if req.mir_weights else level_weights[level]
+            features = skeletal_analysis.extract_mir_features(req.abc, weights=weights)
+            mir_features_levels[level] = features
+            mir_csvs[level] = skeletal_analysis.mir_features_to_csv(features)
+
+        # Use level 1 as default
+        mir_features = mir_features_levels[1]
+        mir_csv = mir_csvs[1]
+
+        # Feature A: AI Analysis (if session_url provided)
+        ai_skeletal_abc = None
+        ai_reasoning = None
+        ai_note_scores = None
+        num_settings = 0
+
+        if req.session_url and ANTHROPIC_AVAILABLE:
+            print("[SKELETAL] Fetching Session variations for AI analysis...")
+            try:
+                # Fetch variations from The Session (reuse session.html logic)
+                tune_data = session_scraper.fetch_tune_from_session(req.session_url)
+                settings = tune_data.get('settings', [])
+                num_settings = len(settings)
+
+                if num_settings > 0:
+                    print(f"[SKELETAL] Found {num_settings} settings, analyzing with AI...")
+
+                    # Transpose all to match user's key
+                    user_key_match = re.search(r'K:\s*([A-G][#b]?\s*\w*)', req.abc)
+                    user_key = ''.join(c for c in user_key_match.group(1).strip() if c.isprintable()).strip() if user_key_match else None
+
+                    transposed_settings = []
+                    for idx, setting_abc in enumerate(settings[:12], 1):  # Limit to 12 for AI analysis
+                        try:
+                            if user_key:
+                                # Extract the key from this setting
+                                setting_key_match = re.search(r'K:\s*([A-G][#b]?\s*\w*)', setting_abc)
+                                if setting_key_match:
+                                    setting_key = ''.join(c for c in setting_key_match.group(1).strip() if c.isprintable()).strip()
+                                    transposed_abc = abc_transpose.transpose_abc_tune_music21(setting_abc, setting_key, user_key)
+                                else:
+                                    transposed_abc = setting_abc
+                            else:
+                                transposed_abc = setting_abc
+
+                            transposed_settings.append({
+                                'setting_number': idx,
+                                'abc': transposed_abc
+                            })
+                        except Exception as e:
+                            print(f"[SKELETAL] Transpose failed for setting {idx}: {e}")
+                            transposed_settings.append({
+                                'setting_number': idx,
+                                'abc': setting_abc
+                            })
+
+                    # AI prompt to analyze conserved vs. variable notes
+                    variations_text = '\n\n'.join([
+                        f"Setting {s['setting_number']}:\n{s['abc']}"
+                        for s in transposed_settings
+                    ])
+
+                    ai_prompt = f"""Analyze these {len(transposed_settings)} variations of the same Irish traditional tune.
+
+Original (user's version):
+{req.abc}
+
+Variations from The Session ({len(transposed_settings)} total):
+{variations_text}
+
+For each note in the original ABC, count how many of the {len(transposed_settings)} variations have the same note (same pitch + duration) at approximately the same position.
+
+Calculate the conservation percentage: (number of variations with this note / {len(transposed_settings)}) × 100
+
+Return JSON with:
+{{
+  "skeletal_abc": "ABC notation with only the most conserved notes (appearing in 50%+ of variations)",
+  "reasoning": "2-3 sentences explaining what patterns you found (which notes are conserved vs. variable)",
+  "note_scores": [
+    {{"onset": 0.0, "pitch": 64, "score": 0.9167, "count": 11, "reason": "appears in 11/{len(transposed_settings)} variations"}},
+    {{"onset": 0.5, "pitch": 66, "score": 0.1667, "count": 2, "reason": "appears in 2/{len(transposed_settings)} variations - ornamental"}}
+  ]
+}}
+
+IMPORTANT:
+- The "score" field MUST be the exact percentage: count / {len(transposed_settings)}
+- The "count" field is how many variations contain this note
+- Return ONLY valid JSON, nothing else."""
+
+                    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+                    message = client.messages.create(
+                        model="claude-sonnet-4-5-20250929",
+                        max_tokens=3000,
+                        messages=[{"role": "user", "content": ai_prompt}]
+                    )
+
+                    response_text = message.content[0].text.strip()
+
+                    # Clean up markdown if present
+                    if response_text.startswith('```json'):
+                        response_text = response_text.replace('```json', '').replace('```', '').strip()
+                    elif response_text.startswith('```'):
+                        response_text = response_text.replace('```', '').strip()
+
+                    # Parse JSON
+                    import json
+                    ai_result = json.loads(response_text)
+
+                    ai_skeletal_abc = ai_result.get('skeletal_abc', '')
+                    ai_reasoning = ai_result.get('reasoning', '')
+                    ai_note_scores = ai_result.get('note_scores', [])
+
+                    print(f"[SKELETAL] AI analysis complete")
+
+            except Exception as e:
+                print(f"[SKELETAL] AI analysis failed: {e}")
+                # Continue with algorithmic only
+
+        # Feature C: Combine AI + Algorithmic + MIR scores
+        print("[SKELETAL] Combining scores (AI + Algorithmic + MIR)...")
+        combined_scores = []
+
+        for note in algo_features:
+            # Find matching AI score by onset
+            ai_score = None
+            if ai_note_scores:
+                # Find closest matching note by onset (within 0.1)
+                matches = [s for s in ai_note_scores
+                          if abs(s.get('onset', 999) - note['onset']) < 0.1]
+                if matches:
+                    ai_score = matches[0].get('score', None)
+
+            # Find matching MIR score by onset
+            mir_score = None
+            for mir_note in mir_features:
+                if abs(mir_note['onset'] - note['onset']) < 0.01:
+                    mir_score = mir_note['mir_score']
+                    break
+
+            # Weighted combination: 40% AI, 30% algorithmic, 30% MIR
+            # If AI not available: 50% algorithmic, 50% MIR
+            if ai_score is not None:
+                combined_score = (0.4 * ai_score) + (0.3 * note['algo_score']) + (0.3 * mir_score)
+            else:
+                # No AI score - use algorithmic + MIR
+                combined_score = (0.5 * note['algo_score']) + (0.5 * mir_score)
+                ai_score = note['algo_score']  # Display algo score in AI column for clarity
+
+            combined_scores.append({
+                'onset': note['onset'],
+                'pitch': note['pitch'],
+                'note_name': note['note_name'],
+                'duration': note['duration'],
+                'ai_score': ai_score,
+                'algo_score': note['algo_score'],
+                'mir_score': mir_score,
+                'combined_score': combined_score
+            })
+
+        # Generate combined CSV
+        combined_csv = skeletal_analysis.combined_scores_to_csv(combined_scores)
+
+        print("[SKELETAL] Analysis complete!")
+
+        return {
+            'original_abc': req.abc,
+            'ai_skeletal_abc': ai_skeletal_abc,
+            'ai_reasoning': ai_reasoning,
+            'ai_note_scores': ai_note_scores,  # Include for AI slider
+            'num_settings': num_settings,
+            'algo_skeletal_abc': algo_skeletal_abc,
+            'algo_features': algo_features,  # Include for frontend slider (current level)
+            'algo_features_levels': algo_features_levels,  # All 3 complexity levels
+            'algo_csvs': algo_csvs,  # CSVs for all 3 levels
+            'algo_csv': algo_csv,
+            'mir_features': mir_features,  # Include for MIR slider (level 1)
+            'mir_features_levels': mir_features_levels,  # All 3 MIR complexity levels
+            'mir_csvs': mir_csvs,  # MIR CSVs for all 3 levels
+            'mir_csv': mir_csv,
+            'combined_csv': combined_csv,
+            'combined_scores': combined_scores
+        }
+
+    except Exception as e:
+        print(f"[SKELETAL ERROR] {e}")
+        import traceback
+        traceback.print_exc()
+        return {'error': str(e)}
+
+
+@app.post("/analyze-simple")
+async def analyze_simple(req: SimpleAnalysisRequest):
+    """
+    Simple skeletal analysis using 5 practical methods
+    """
+    try:
+        print("[SIMPLE] Starting simple analysis...")
+
+        # Extract features once for reuse
+        algo_features = skeletal_analysis.extract_music21_features(req.abc, complexity_level=3)
+        algo_features = skeletal_analysis.normalize_importance_scores(algo_features)
+
+        # Method 1: Metric × Duration Rule
+        method1_notes = []
+        for note in algo_features:
+            score = note['duration'] * note['beatStrength']
+            if score >= 0.5:  # Threshold for strong+long notes
+                method1_notes.append(note)
+
+        method1_abc = skeletal_analysis.generate_skeletal_abc(req.abc, method1_notes, threshold=0)
+        method1_explanation = f"Selected {len(method1_notes)} notes with metric×duration ≥ 0.5"
+
+        # Method 2: One Note Per Measure
+        # Group notes by measure and pick the one with highest metric×duration
+        measure_notes = {}
+        for note in algo_features:
+            measure = int(note['onset'] // 3)  # Assuming 6/8 time, 3 beats per measure
+            score = note['duration'] * note['beatStrength']
+            if measure not in measure_notes or score > measure_notes[measure][1]:
+                measure_notes[measure] = (note, score)
+
+        method2_notes = [note for note, score in measure_notes.values()]
+        method2_abc = skeletal_analysis.generate_skeletal_abc(req.abc, method2_notes, threshold=0)
+        method2_explanation = f"Selected 1 note per measure ({len(method2_notes)} total)"
+
+        # Method 3: Melodic Contour (peaks, valleys, direction changes)
+        method3_notes = []
+        for note in algo_features:
+            if note.get('isContourPeak') or note.get('isContourValley'):
+                method3_notes.append(note)
+
+        method3_abc = skeletal_analysis.generate_skeletal_abc(req.abc, method3_notes, threshold=0)
+        method3_explanation = f"Selected {len(method3_notes)} contour points (peaks & valleys)"
+
+        # Method 4: Chord Tones on Strong Beats
+        method4_notes = []
+        for note in algo_features:
+            if note.get('isChordTone') and note['beatStrength'] >= 0.5:
+                method4_notes.append(note)
+
+        method4_abc = skeletal_analysis.generate_skeletal_abc(req.abc, method4_notes, threshold=0)
+        method4_explanation = f"Selected {len(method4_notes)} chord tones on strong beats"
+
+        # Method 5: Variation Analysis (if Session URL provided)
+        method5_notes = []
+        method5_explanation = "No Session URL provided"
+        num_variations = 0
+
+        if req.session_url and ANTHROPIC_AVAILABLE:
+            try:
+                tune_data = session_scraper.fetch_tune_from_session(req.session_url)
+                settings = tune_data.get('settings', [])
+                num_variations = len(settings)
+
+                if num_variations > 0:
+                    # Use the AI analysis we already have
+                    user_key_match = re.search(r'K:\s*([A-G][#b]?\s*\w*)', req.abc)
+                    user_key = ''.join(c for c in user_key_match.group(1).strip() if c.isprintable()).strip() if user_key_match else None
+
+                    transposed_settings = []
+                    for idx, setting_abc in enumerate(settings[:12], 1):
+                        try:
+                            if user_key:
+                                setting_key_match = re.search(r'K:\s*([A-G][#b]?\s*\w*)', setting_abc)
+                                if setting_key_match:
+                                    setting_key = ''.join(c for c in setting_key_match.group(1).strip() if c.isprintable()).strip()
+                                    transposed_abc = abc_transpose.transpose_abc_tune_music21(setting_abc, setting_key, user_key)
+                                else:
+                                    transposed_abc = setting_abc
+                            else:
+                                transposed_abc = setting_abc
+
+                            transposed_settings.append({'setting_number': idx, 'abc': transposed_abc})
+                        except:
+                            transposed_settings.append({'setting_number': idx, 'abc': setting_abc})
+
+                    # AI analysis for conserved notes
+                    variations_text = '\n\n'.join([f"Setting {s['setting_number']}:\n{s['abc']}" for s in transposed_settings])
+
+                    ai_prompt = f"""Analyze these {len(transposed_settings)} variations. Return notes that appear in 50%+ of variations.
+
+Original: {req.abc}
+
+Variations: {variations_text}
+
+Return JSON: {{"note_scores": [{{"onset": 0.0, "pitch": 64, "score": 0.75}}]}}"""
+
+                    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+                    message = client.messages.create(
+                        model="claude-sonnet-4-5-20250929",
+                        max_tokens=2000,
+                        messages=[{"role": "user", "content": ai_prompt}]
+                    )
+
+                    response_text = message.content[0].text.strip()
+                    if response_text.startswith('```json'):
+                        response_text = response_text.replace('```json', '').replace('```', '').strip()
+
+                    ai_result = json.loads(response_text)
+                    ai_note_scores = ai_result.get('note_scores', [])
+
+                    # Match AI scores to our notes
+                    for note in algo_features:
+                        for ai_note in ai_note_scores:
+                            if abs(ai_note.get('onset', 999) - note['onset']) < 0.1:
+                                if ai_note.get('score', 0) >= 0.5:
+                                    method5_notes.append(note)
+                                break
+
+                    method5_explanation = f"Selected {len(method5_notes)} notes conserved across {num_variations} variations"
+            except Exception as e:
+                print(f"[SIMPLE] Method 5 failed: {e}")
+                method5_explanation = f"Variation analysis failed: {str(e)}"
+
+        method5_abc = skeletal_analysis.generate_skeletal_abc(req.abc, method5_notes, threshold=0) if method5_notes else req.abc
+
+        # Final Combined: Use consensus (notes appearing in 3+ methods)
+        note_votes = {}
+        for note in algo_features:
+            onset = note['onset']
+            note_votes[onset] = 0
+
+            if note in method1_notes:
+                note_votes[onset] += 1
+            if note in method2_notes:
+                note_votes[onset] += 1
+            if note in method3_notes:
+                note_votes[onset] += 1
+            if note in method4_notes:
+                note_votes[onset] += 1
+            if note in method5_notes:
+                note_votes[onset] += 1
+
+        # Require 2+ votes (appearing in at least 2 methods)
+        final_notes = [note for note in algo_features if note_votes.get(note['onset'], 0) >= 2]
+        final_abc = skeletal_analysis.generate_skeletal_abc(req.abc, final_notes, threshold=0)
+
+        # Generate narrative with AI
+        narrative = "Analysis complete."
+        if ANTHROPIC_AVAILABLE:
+            try:
+                narrative_prompt = f"""Analyze these 5 skeletal reduction methods for an Irish tune:
+
+Method 1 (Metric×Duration): {len(method1_notes)} notes
+Method 2 (One per measure): {len(method2_notes)} notes
+Method 3 (Contour): {len(method3_notes)} notes
+Method 4 (Chord tones): {len(method4_notes)} notes
+Method 5 (Variations): {len(method5_notes)} notes ({method5_explanation})
+
+Final skeleton: {len(final_notes)} notes (requires 2+ method agreement)
+
+Write a 3-4 sentence narrative assessment comparing these methods and explaining which seem most reliable for this tune."""
+
+                client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+                message = client.messages.create(
+                    model="claude-sonnet-4-5-20250929",
+                    max_tokens=500,
+                    messages=[{"role": "user", "content": narrative_prompt}]
+                )
+
+                narrative = message.content[0].text.strip()
+            except:
+                pass
+
+        return {
+            'original_abc': req.abc,
+            'method1': {'abc': method1_abc, 'explanation': method1_explanation},
+            'method2': {'abc': method2_abc, 'explanation': method2_explanation},
+            'method3': {'abc': method3_abc, 'explanation': method3_explanation},
+            'method4': {'abc': method4_abc, 'explanation': method4_explanation},
+            'method5': {'abc': method5_abc, 'explanation': method5_explanation},
+            'final_abc': final_abc,
+            'narrative': narrative
+        }
+
+    except Exception as e:
+        print(f"[SIMPLE ERROR] {e}")
+        import traceback
+        traceback.print_exc()
+        return {'error': str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8017)
