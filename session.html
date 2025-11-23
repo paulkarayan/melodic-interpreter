@@ -65,6 +65,47 @@
         // State
         let variationAbcs = {};
 
+        // Add visual markers above interesting bars
+        function addBarMarkers(abc, interestingBars) {
+            // Split ABC into lines
+            const lines = abc.split('\n');
+
+            // Find the music lines (after K: header)
+            let musicStartIdx = 0;
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].startsWith('K:')) {
+                    musicStartIdx = i + 1;
+                    break;
+                }
+            }
+
+            // Join music lines
+            const musicLines = lines.slice(musicStartIdx);
+            const music = musicLines.join('\n');
+
+            // Split by bar lines to find bars
+            const bars = music.split('|');
+
+            // Add marker to the beginning of interesting bars
+            const markedBars = bars.map((bar, idx) => {
+                // Bar numbering is 1-indexed for the user
+                const barNum = idx + 1;
+
+                if (interestingBars.includes(barNum) && bar.trim()) {
+                    // Add text annotation above first note
+                    // Use "^*" to put asterisk above the staff
+                    return '"^*"' + bar;
+                }
+                return bar;
+            });
+
+            // Reconstruct ABC
+            const markedMusic = markedBars.join('|');
+            const header = lines.slice(0, musicStartIdx).join('\n');
+
+            return header + '\n' + markedMusic;
+        }
+
         // Sync tempo controls
         const tempoSlider = document.getElementById('tempo-slider');
         const tempoValue = document.getElementById('tempo-value');
@@ -95,7 +136,11 @@
             }
 
             hideError();
+
+            // Clear old results
             document.getElementById('output-section').style.display = 'none';
+            document.getElementById('narrative-content').textContent = '';
+            document.getElementById('examples-container').innerHTML = '';
 
             // Show spinner
             document.getElementById('narrative-content').textContent = '⏳ Fetching variations and analyzing... (this may take 1-2 minutes)';
@@ -172,11 +217,34 @@
                     document.getElementById('examples-container').innerHTML = html;
 
                     // Render all examples (full scores, not snippets)
+                    console.log(`[SESSION] Rendering ${data.examples.length} examples...`);
                     data.examples.forEach((example, i) => {
-                        // Ensure ABC has proper newlines (unescape if needed)
-                        const abc = example.abc.replace(/\\n/g, '\n');
-                        renderAbc(`example-${i}`, abc);
+                        try {
+                            // Ensure ABC has proper newlines (unescape if needed)
+                            let abc = example.abc.replace(/\\n/g, '\n');
+                            console.log(`[SESSION] Example ${i} ABC length: ${abc.length}`);
+
+                            // Add markers for interesting bars
+                            if (example.interesting_bars && example.interesting_bars.length > 0) {
+                                console.log(`[SESSION] Adding markers for bars: ${example.interesting_bars}`);
+                                abc = addBarMarkers(abc, example.interesting_bars);
+                            }
+
+                            // Check if target div exists
+                            const targetDiv = document.getElementById(`example-${i}`);
+                            if (!targetDiv) {
+                                console.error(`[SESSION] Target div example-${i} not found!`);
+                                return;
+                            }
+
+                            console.log(`[SESSION] Rendering ABC for example ${i}...`);
+                            renderAbc(`example-${i}`, abc);
+                            console.log(`[SESSION] Successfully rendered example ${i}`);
+                        } catch (err) {
+                            console.error(`[SESSION] Error rendering example ${i}:`, err);
+                        }
                     });
+                    console.log('[SESSION] All examples rendered');
                 }
 
             } catch (error) {

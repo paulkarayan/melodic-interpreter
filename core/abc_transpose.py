@@ -206,8 +206,8 @@ def transpose_abc_tune_music21(abc_full: str, from_key: str, to_key: str) -> str
 
     Args:
         abc_full: Full ABC notation
-        from_key: Source key (e.g., 'Gmaj', 'G')
-        to_key: Target key (e.g., 'Dmaj', 'D')
+        from_key: Source key (e.g., 'Gmaj', 'G', 'Dmix')
+        to_key: Target key (e.g., 'Dmaj', 'D', 'Ador')
 
     Returns:
         Transposed ABC notation in correct octave
@@ -220,8 +220,18 @@ def transpose_abc_tune_music21(abc_full: str, from_key: str, to_key: str) -> str
         score = converter.parse(abc_full, format='abc')
 
         # Determine transposition interval
-        from_key_clean = from_key.replace('maj', '').replace('min', '')
-        to_key_clean = to_key.replace('maj', '').replace('min', '')
+        # Strip major/minor/modal suffixes to get just the tonic note
+        # Modal suffixes: dor (Dorian), phr (Phrygian), lyd (Lydian), mix (Mixolydian), aeo (Aeolian), loc (Locrian)
+        modal_suffixes = ['maj', 'min', 'dor', 'phr', 'lyd', 'mix', 'aeo', 'loc', 'major', 'minor',
+                          'dorian', 'phrygian', 'lydian', 'mixolydian', 'aeolian', 'locrian', 'm']
+
+        from_key_clean = from_key
+        to_key_clean = to_key
+
+        # Remove modal suffixes (case insensitive)
+        for suffix in modal_suffixes:
+            from_key_clean = re.sub(f'{suffix}$', '', from_key_clean, flags=re.IGNORECASE).strip()
+            to_key_clean = re.sub(f'{suffix}$', '', to_key_clean, flags=re.IGNORECASE).strip()
 
         # Create interval for transposition
         note_from = note.Note(f'{from_key_clean}4')

@@ -1606,6 +1606,7 @@ async def analyze_skeletal(req: SkeletalAnalysisRequest):
                                 'abc': transposed_abc
                             })
                         except Exception as e:
+                            # Fallback to original if transpose fails
                             print(f"[SKELETAL] Transpose failed for setting {idx}: {e}")
                             transposed_settings.append({
                                 'setting_number': idx,
@@ -1654,11 +1655,21 @@ IMPORTANT:
 
                     response_text = message.content[0].text.strip()
 
-                    # Clean up markdown if present
-                    if response_text.startswith('```json'):
-                        response_text = response_text.replace('```json', '').replace('```', '').strip()
-                    elif response_text.startswith('```'):
-                        response_text = response_text.replace('```', '').strip()
+                    # Clean up markdown blocks
+                    if response_text.startswith('```'):
+                        # Remove code fence markers
+                        lines = response_text.split('\n')
+                        # Remove first line if it's a fence
+                        if lines[0].startswith('```'):
+                            lines = lines[1:]
+                        # Remove last line if it's a fence
+                        if lines and lines[-1].strip() == '```':
+                            lines = lines[:-1]
+                        response_text = '\n'.join(lines).strip()
+
+                    # Validate we have content
+                    if not response_text:
+                        raise ValueError("AI returned empty response")
 
                     # Parse JSON
                     import json
@@ -1829,7 +1840,9 @@ async def analyze_simple(req: SimpleAnalysisRequest):
                                 transposed_abc = setting_abc
 
                             transposed_settings.append({'setting_number': idx, 'abc': transposed_abc})
-                        except:
+                        except Exception as e:
+                            # Fallback to original if transpose fails
+                            print(f"[SIMPLE] Transpose failed for setting {idx}: {e}")
                             transposed_settings.append({'setting_number': idx, 'abc': setting_abc})
 
                     # AI analysis for conserved notes
@@ -1851,8 +1864,22 @@ Return JSON: {{"note_scores": [{{"onset": 0.0, "pitch": 64, "score": 0.75}}]}}""
                     )
 
                     response_text = message.content[0].text.strip()
-                    if response_text.startswith('```json'):
-                        response_text = response_text.replace('```json', '').replace('```', '').strip()
+
+                    # Clean up markdown blocks
+                    if response_text.startswith('```'):
+                        # Remove code fence markers
+                        lines = response_text.split('\n')
+                        # Remove first line if it's a fence
+                        if lines[0].startswith('```'):
+                            lines = lines[1:]
+                        # Remove last line if it's a fence
+                        if lines and lines[-1].strip() == '```':
+                            lines = lines[:-1]
+                        response_text = '\n'.join(lines).strip()
+
+                    # Validate we have content
+                    if not response_text:
+                        raise ValueError("AI returned empty response")
 
                     ai_result = json.loads(response_text)
                     ai_note_scores = ai_result.get('note_scores', [])
